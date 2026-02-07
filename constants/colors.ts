@@ -1,12 +1,48 @@
-// template
-const tintColorLight = "#2f95dc";
-
-export default {
+const Colors = {
+  dark: {
+    background: "#08080F",
+    surface: "#12121C",
+    surfaceElevated: "#1A1A28",
+    surfaceHighlight: "#222234",
+    primary: "#D4A574",
+    primaryMuted: "rgba(212, 165, 116, 0.15)",
+    accent: "#00E676",
+    accentMuted: "rgba(0, 230, 118, 0.12)",
+    warning: "#FF5252",
+    warningMuted: "rgba(255, 82, 82, 0.12)",
+    text: "#FFFFFF",
+    textSecondary: "rgba(255, 255, 255, 0.6)",
+    textTertiary: "rgba(255, 255, 255, 0.35)",
+    border: "rgba(255, 255, 255, 0.08)",
+    tint: "#D4A574",
+    tabIconDefault: "rgba(255,255,255,0.4)",
+    tabIconSelected: "#D4A574",
+    premium: "#FFD700",
+    premiumGradientStart: "#FFD700",
+    premiumGradientEnd: "#FFA000",
+  },
   light: {
-    text: "#000",
-    background: "#fff",
-    tint: tintColorLight,
-    tabIconDefault: "#ccc",
-    tabIconSelected: tintColorLight,
+    background: "#08080F",
+    surface: "#12121C",
+    surfaceElevated: "#1A1A28",
+    surfaceHighlight: "#222234",
+    primary: "#D4A574",
+    primaryMuted: "rgba(212, 165, 116, 0.15)",
+    accent: "#00E676",
+    accentMuted: "rgba(0, 230, 118, 0.12)",
+    warning: "#FF5252",
+    warningMuted: "rgba(255, 82, 82, 0.12)",
+    text: "#FFFFFF",
+    textSecondary: "rgba(255, 255, 255, 0.6)",
+    textTertiary: "rgba(255, 255, 255, 0.35)",
+    border: "rgba(255, 255, 255, 0.08)",
+    tint: "#D4A574",
+    tabIconDefault: "rgba(255,255,255,0.4)",
+    tabIconSelected: "#D4A574",
+    premium: "#FFD700",
+    premiumGradientStart: "#FFD700",
+    premiumGradientEnd: "#FFA000",
   },
 };
+
+export default Colors;
