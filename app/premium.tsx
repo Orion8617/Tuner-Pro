@@ -129,6 +129,50 @@ export default function PremiumScreen() {
           </View>
         </View>
 
+        <View style={styles.compareSection}>
+          <Text style={styles.compareTitle}>{t("premium.compareTitle")}</Text>
+          <View style={styles.compareTable}>
+            <View style={styles.compareHeader}>
+              <View style={styles.compareColLeft}>
+                <Text style={styles.compareHeaderText}>{t("premium.compareOthers")}</Text>
+              </View>
+              <View style={styles.compareColRight}>
+                <Text style={styles.compareHeaderTextHighlight}>{t("premium.compareUs")}</Text>
+              </View>
+            </View>
+            <View style={styles.compareRow}>
+              <View style={styles.compareColLeft}>
+                <Ionicons name="close-circle" size={16} color={Colors.dark.warning} />
+                <Text style={styles.compareTextBad}>{t("premium.compareAds")}</Text>
+              </View>
+              <View style={styles.compareColRight}>
+                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.accent} />
+                <Text style={styles.compareTextGood}>{t("premium.compareNoAds")}</Text>
+              </View>
+            </View>
+            <View style={styles.compareRow}>
+              <View style={styles.compareColLeft}>
+                <Ionicons name="close-circle" size={16} color={Colors.dark.warning} />
+                <Text style={styles.compareTextBad}>{t("premium.comparePrice")}</Text>
+              </View>
+              <View style={styles.compareColRight}>
+                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.accent} />
+                <Text style={styles.compareTextGood}>{t("premium.compareOurPrice")}</Text>
+              </View>
+            </View>
+            <View style={styles.compareRow}>
+              <View style={styles.compareColLeft}>
+                <Ionicons name="close-circle" size={16} color={Colors.dark.warning} />
+                <Text style={styles.compareTextBad}>{t("premium.compareBloat")}</Text>
+              </View>
+              <View style={styles.compareColRight}>
+                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.accent} />
+                <Text style={styles.compareTextGood}>{t("premium.compareFast")}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         <View style={styles.featuresContainer}>
           {getFeatures().map((feature, index) => (
             <View key={index} style={styles.featureRow}>
@@ -364,5 +408,70 @@ const styles = StyleSheet.create({
     color: Colors.dark.textTertiary,
     textAlign: "center",
     marginTop: 16,
+  },
+  compareSection: {
+    marginTop: 24,
+    gap: 12,
+  },
+  compareTitle: {
+    fontSize: 17,
+    fontWeight: "700" as const,
+    color: Colors.dark.text,
+    textAlign: "center",
+  },
+  compareTable: {
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  compareHeader: {
+    flexDirection: "row",
+    backgroundColor: Colors.dark.surfaceHighlight,
+  },
+  compareColLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    padding: 12,
+  },
+  compareColRight: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    padding: 12,
+    backgroundColor: "rgba(0, 230, 118, 0.06)",
+  },
+  compareHeaderText: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: Colors.dark.textTertiary,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+  },
+  compareHeaderTextHighlight: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: Colors.dark.accent,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+  },
+  compareRow: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+  },
+  compareTextBad: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    flex: 1,
+  },
+  compareTextGood: {
+    fontSize: 13,
+    color: Colors.dark.accent,
+    fontWeight: "600" as const,
+    flex: 1,
   },
 });
