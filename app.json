@@ -3,6 +3,7 @@
     "name": "GuitarTune",
     "slug": "guitar-tune",
     "version": "1.0.0",
+    "description": "The most accurate guitar tuner app. No ads, no bloat, fair price. 10 tunings including Standard, Drop D, DADGAD, Open G, Open D, Open E, Drop C and more. Real-time pitch detection with haptic feedback.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "guitartune",
