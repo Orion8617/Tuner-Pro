@@ -27,11 +27,11 @@ export const STANDARD_TUNING: GuitarString[] = [
 export const ALL_TUNINGS: TuningConfig[] = [
   {
     id: "standard",
-    name: "Estándar",
+    name: "Standard",
     shortName: "EADGBE",
     strings: STANDARD_TUNING,
     isPremium: false,
-    genre: "Todo",
+    genre: "All Genres",
   },
   {
     id: "double_drop_d",
@@ -46,7 +46,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
       { name: "1", note: "D", octave: 4, frequency: 293.66, stringNumber: 1 },
     ],
     isPremium: false,
-    genre: "Folk / Acústico",
+    genre: "Folk / Acoustic",
   },
   {
     id: "open_c",
@@ -61,7 +61,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
       { name: "1", note: "E", octave: 4, frequency: 329.63, stringNumber: 1 },
     ],
     isPremium: false,
-    genre: "Alternativo / Folk",
+    genre: "Alternative / Folk",
   },
   {
     id: "all_fourths",
@@ -76,7 +76,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
       { name: "1", note: "F", octave: 4, frequency: 349.23, stringNumber: 1 },
     ],
     isPremium: false,
-    genre: "Jazz / Fusión",
+    genre: "Jazz / Fusion",
   },
   {
     id: "drop_d",

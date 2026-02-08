@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { TuningConfig, getFreeTunings, getPremiumTunings } from "@/lib/tuner-engine";
+import { t } from "@/lib/i18n";
 
 interface TuningSelectorProps {
   currentTuning: TuningConfig;
@@ -86,7 +87,7 @@ export default function TuningSelector({
               <Ionicons name="lock-open" size={12} color={Colors.dark.accent} />
             </View>
           ) : (
-            <Text style={styles.freeText}>Gratis</Text>
+            <Text style={styles.freeText}>{t("tuningSelector.free")}</Text>
           )}
         </View>
       </Pressable>
@@ -128,7 +129,7 @@ export default function TuningSelector({
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Afinaciones</Text>
+              <Text style={styles.modalTitle}>{t("tuningSelector.title")}</Text>
               <Pressable
                 style={styles.closeButton}
                 onPress={() => setModalVisible(false)}
@@ -142,13 +143,13 @@ export default function TuningSelector({
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
-              <Text style={styles.sectionTitle}>Gratis</Text>
+              <Text style={styles.sectionTitle}>{t("tuningSelector.free")}</Text>
               {freeTunings.map(renderTuningItem)}
 
               <View style={styles.sectionDivider} />
 
               <View style={styles.premiumHeaderRow}>
-                <Text style={styles.sectionTitle}>Premium</Text>
+                <Text style={styles.sectionTitle}>{t("tuningSelector.premium")}</Text>
                 <View style={styles.premiumBadgeSmall}>
                   <Ionicons name="diamond" size={12} color={Colors.dark.premium} />
                   <Text style={styles.premiumBadgeText}>PRO</Text>
@@ -156,7 +157,7 @@ export default function TuningSelector({
               </View>
               {!isPremiumUser && (
                 <Text style={styles.premiumHint}>
-                  Las afinaciones más populares para profesionales
+                  {t("tuningSelector.premiumHint")}
                 </Text>
               )}
               {premiumTunings.map(renderTuningItem)}

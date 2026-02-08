@@ -8,6 +8,7 @@ import Animated, {
 import { useEffect } from "react";
 import Colors from "@/constants/colors";
 import { getTuningStatus } from "@/lib/tuner-engine";
+import { t } from "@/lib/i18n";
 
 interface NoteDisplayProps {
   note: string | null;
@@ -53,11 +54,11 @@ export default function NoteDisplay({
 
   const statusText =
     status === "in_tune"
-      ? "Afinado"
+      ? t("noteDisplay.inTune")
       : status === "flat"
-      ? "Bajo"
+      ? t("noteDisplay.flat")
       : status === "sharp"
-      ? "Alto"
+      ? t("noteDisplay.sharp")
       : "";
 
   const centsLabel = isActive
@@ -86,7 +87,7 @@ export default function NoteDisplay({
         <View style={[styles.statusPill, { backgroundColor: statusColor + "20" }]}>
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
           <Text style={[styles.statusText, { color: statusColor }]}>
-            {isActive ? statusText : "Esperando..."}
+            {isActive ? statusText : t("noteDisplay.listening")}
           </Text>
         </View>
 
@@ -100,7 +101,7 @@ export default function NoteDisplay({
 
       {targetFrequency && (
         <Text style={styles.targetFreq}>
-          Objetivo: {targetFrequency.toFixed(2)} Hz
+          {t("noteDisplay.target")} {targetFrequency.toFixed(2)} Hz
         </Text>
       )}
     </View>

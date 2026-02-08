@@ -7,45 +7,48 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { t } from "@/lib/i18n";
 
-const FEATURES = [
-  {
-    icon: "musical-notes" as const,
-    title: "6 Afinaciones Premium",
-    desc: "Drop D, Open G, DADGAD, Open D, Open E, Drop C",
-    free: false,
-  },
-  {
-    icon: "speedometer" as const,
-    title: "Detección Avanzada",
-    desc: "Algoritmo de alta precisión para graves y agudos",
-    free: false,
-  },
-  {
-    icon: "analytics" as const,
-    title: "Historial de Afinación",
-    desc: "Seguimiento de tu progreso de afinación",
-    free: false,
-  },
-  {
-    icon: "color-palette" as const,
-    title: "Temas Personalizados",
-    desc: "Personaliza la apariencia de la app",
-    free: false,
-  },
-  {
-    icon: "radio" as const,
-    title: "Afinador Estándar",
-    desc: "Detección de afinación estándar con vibración",
-    free: true,
-  },
-  {
-    icon: "git-branch" as const,
-    title: "3 Afinaciones Gratis",
-    desc: "Double Drop D, Open C, All Fourths",
-    free: true,
-  },
-];
+function getFeatures() {
+  return [
+    {
+      icon: "musical-notes" as const,
+      title: t("premium.premiumTunings"),
+      desc: "Drop D, Open G, DADGAD, Open D, Open E, Drop C",
+      free: false,
+    },
+    {
+      icon: "speedometer" as const,
+      title: t("premium.advancedDetection"),
+      desc: t("premium.advancedDetectionDesc"),
+      free: false,
+    },
+    {
+      icon: "analytics" as const,
+      title: t("premium.tuningHistory"),
+      desc: t("premium.tuningHistoryDesc"),
+      free: false,
+    },
+    {
+      icon: "color-palette" as const,
+      title: t("premium.customThemes"),
+      desc: t("premium.customThemesDesc"),
+      free: false,
+    },
+    {
+      icon: "radio" as const,
+      title: t("premium.standardTuner"),
+      desc: t("premium.standardTunerDesc"),
+      free: true,
+    },
+    {
+      icon: "git-branch" as const,
+      title: t("premium.freeTunings"),
+      desc: "Double Drop D, Open C, All Fourths",
+      free: true,
+    },
+  ];
+}
 
 export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
@@ -60,7 +63,7 @@ export default function PremiumScreen() {
       });
 
       if (Platform.OS === "web") {
-        const confirmed = confirm("¿Se completó tu compra exitosamente?");
+        const confirmed = confirm(t("premium.confirmWeb"));
         if (confirmed) {
           await upgradeToPremium();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -68,12 +71,12 @@ export default function PremiumScreen() {
         }
       } else {
         Alert.alert(
-          "¿Compra completada?",
-          "¿Se realizó tu pago exitosamente?",
+          t("premium.alertTitle"),
+          t("premium.alertMessage"),
           [
-            { text: "No", style: "cancel" },
+            { text: t("premium.no"), style: "cancel" },
             {
-              text: "Sí",
+              text: t("premium.yes"),
               onPress: async () => {
                 await upgradeToPremium();
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -107,27 +110,27 @@ export default function PremiumScreen() {
           </LinearGradient>
           <Text style={styles.title}>GuitarTune Pro</Text>
           <Text style={styles.subtitle}>
-            Desbloquea todas las funciones premium
+            {t("premium.subtitle")}
           </Text>
         </View>
 
         <View style={styles.priceContainer}>
           <View style={styles.priceOption}>
             <Text style={styles.priceAmount}>$1.99</Text>
-            <Text style={styles.pricePeriod}>/ mes</Text>
+            <Text style={styles.pricePeriod}>{t("premium.perMonth")}</Text>
           </View>
           <View style={styles.priceDivider} />
           <View style={styles.priceOption}>
             <View style={styles.saveBadge}>
-              <Text style={styles.saveText}>Ahorra 58%</Text>
+              <Text style={styles.saveText}>{t("premium.save")}</Text>
             </View>
             <Text style={styles.priceAmount}>$9.99</Text>
-            <Text style={styles.pricePeriod}>/ año</Text>
+            <Text style={styles.pricePeriod}>{t("premium.perYear")}</Text>
           </View>
         </View>
 
         <View style={styles.featuresContainer}>
-          {FEATURES.map((feature, index) => (
+          {getFeatures().map((feature, index) => (
             <View key={index} style={styles.featureRow}>
               <View
                 style={[
@@ -164,7 +167,7 @@ export default function PremiumScreen() {
         {user?.isPremium ? (
           <View style={styles.activeBadge}>
             <Ionicons name="checkmark-circle" size={24} color={Colors.dark.accent} />
-            <Text style={styles.activeText}>Plan Pro Activo</Text>
+            <Text style={styles.activeText}>{t("premium.activePlan")}</Text>
           </View>
         ) : (
           <Pressable
@@ -181,13 +184,13 @@ export default function PremiumScreen() {
               end={{ x: 1, y: 0 }}
             >
               <Ionicons name="diamond" size={20} color="#000" />
-              <Text style={styles.purchaseText}>Suscribirse a Pro</Text>
+              <Text style={styles.purchaseText}>{t("premium.subscribe")}</Text>
             </LinearGradient>
           </Pressable>
         )}
 
         <Text style={styles.disclaimer}>
-          Powered by Lemon Squeezy. Cancela cuando quieras.
+          {t("premium.disclaimer")}
         </Text>
       </ScrollView>
     </View>

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
+import { t } from "@/lib/i18n";
 
 interface User {
   id: string;
@@ -68,12 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const stored = users[userKey];
 
       if (!stored) {
-        return { success: false, error: "Usuario no encontrado" };
+        return { success: false, error: t("authContext.userNotFound") };
       }
 
       const hash = await hashPassword(password);
       if (hash !== stored.passwordHash) {
-        return { success: false, error: "Contraseña incorrecta" };
+        return { success: false, error: t("authContext.wrongPassword") };
       }
 
       const loggedInUser: User = {
@@ -87,24 +88,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(loggedInUser);
       return { success: true };
     } catch (e) {
-      return { success: false, error: "Error al iniciar sesión" };
+      return { success: false, error: t("authContext.loginError") };
     }
   }
 
   async function register(username: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
       if (username.trim().length < 3) {
-        return { success: false, error: "El nombre de usuario debe tener al menos 3 caracteres" };
+        return { success: false, error: t("authContext.usernameTooShort") };
       }
       if (password.length < 6) {
-        return { success: false, error: "La contraseña debe tener al menos 6 caracteres" };
+        return { success: false, error: t("authContext.passwordTooShort") };
       }
 
       const users = await getStoredUsers();
       const userKey = username.toLowerCase().trim();
 
       if (users[userKey]) {
-        return { success: false, error: "Este nombre de usuario ya existe" };
+        return { success: false, error: t("authContext.usernameTaken") };
       }
 
       const id = Crypto.randomUUID();
@@ -126,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(newUser);
       return { success: true };
     } catch (e) {
-      return { success: false, error: "Error al crear la cuenta" };
+      return { success: false, error: t("authContext.registerError") };
     }
   }
 

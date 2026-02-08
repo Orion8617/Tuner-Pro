@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { t } from "@/lib/i18n";
 
 export default function RegisterScreen() {
   const { register } = useAuth();
@@ -27,13 +28,13 @@ export default function RegisterScreen() {
 
   async function handleRegister() {
     if (!username.trim() || !password || !confirmPassword) {
-      setError("Completa todos los campos");
+      setError(t("register.fillFields"));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden");
+      setError(t("register.passwordMismatch"));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -48,7 +49,7 @@ export default function RegisterScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.dismissAll();
     } else {
-      setError(result.error || "Error al crear la cuenta");
+      setError(result.error || t("register.failed"));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   }
@@ -68,8 +69,8 @@ export default function RegisterScreen() {
             <Ionicons name="person-add" size={40} color={Colors.dark.primary} />
           </View>
 
-          <Text style={styles.title}>Crear Cuenta</Text>
-          <Text style={styles.subtitle}>Registrate para guardar tu progreso</Text>
+          <Text style={styles.title}>{t("register.title")}</Text>
+          <Text style={styles.subtitle}>{t("register.subtitle")}</Text>
 
           {!!error && (
             <View style={styles.errorContainer}>
@@ -83,7 +84,7 @@ export default function RegisterScreen() {
               <Ionicons name="person-outline" size={20} color={Colors.dark.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Nombre de usuario"
+                placeholder={t("register.username")}
                 placeholderTextColor={Colors.dark.textTertiary}
                 value={username}
                 onChangeText={setUsername}
@@ -96,7 +97,7 @@ export default function RegisterScreen() {
               <Ionicons name="lock-closed-outline" size={20} color={Colors.dark.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Contraseña"
+                placeholder={t("register.password")}
                 placeholderTextColor={Colors.dark.textTertiary}
                 value={password}
                 onChangeText={setPassword}
@@ -115,7 +116,7 @@ export default function RegisterScreen() {
               <Ionicons name="shield-checkmark-outline" size={20} color={Colors.dark.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Confirmar contraseña"
+                placeholder={t("register.confirmPassword")}
                 placeholderTextColor={Colors.dark.textTertiary}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -136,16 +137,16 @@ export default function RegisterScreen() {
             {loading ? (
               <ActivityIndicator color={Colors.dark.background} />
             ) : (
-              <Text style={styles.registerButtonText}>Crear Cuenta</Text>
+              <Text style={styles.registerButtonText}>{t("register.createAccount")}</Text>
             )}
           </Pressable>
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>¿Ya tienes cuenta?</Text>
+          <Text style={styles.footerText}>{t("register.hasAccount")}</Text>
           <Link href="/(auth)/login" asChild>
             <Pressable>
-              <Text style={styles.linkText}>Iniciar sesión</Text>
+              <Text style={styles.linkText}>{t("register.signIn")}</Text>
             </Pressable>
           </Link>
         </View>

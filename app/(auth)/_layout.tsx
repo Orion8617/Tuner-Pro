@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import Colors from "@/constants/colors";
+import { t } from "@/lib/i18n";
 
 export default function AuthLayout() {
   return (
@@ -12,8 +13,8 @@ export default function AuthLayout() {
         contentStyle: { backgroundColor: Colors.dark.background },
       }}
     >
-      <Stack.Screen name="login" options={{ title: "Iniciar Sesión" }} />
-      <Stack.Screen name="register" options={{ title: "Crear Cuenta" }} />
+      <Stack.Screen name="login" options={{ title: t("auth.signIn") }} />
+      <Stack.Screen name="register" options={{ title: t("auth.createAccount") }} />
     </Stack>
   );
 }

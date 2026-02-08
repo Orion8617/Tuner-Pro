@@ -22,6 +22,7 @@ import Animated, {
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { t } from "@/lib/i18n";
 import TunerDial from "@/components/TunerDial";
 import NoteDisplay from "@/components/NoteDisplay";
 import StringSelector from "@/components/StringSelector";
@@ -361,10 +362,10 @@ export default function TunerScreen() {
         </Animated.View>
         <Text style={styles.micLabel}>
           {permissionDenied
-            ? "Permiso de micrófono denegado"
+            ? t("tuner.permissionDenied")
             : isListening
-            ? "Toca una cuerda..."
-            : "Toca para comenzar"}
+            ? t("tuner.playString")
+            : t("tuner.tapToStart")}
         </Text>
       </View>
 

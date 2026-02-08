@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { t } from "@/lib/i18n";
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -26,7 +27,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!username.trim() || !password) {
-      setError("Completa todos los campos");
+      setError(t("login.fillFields"));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -41,7 +42,7 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.dismissAll();
     } else {
-      setError(result.error || "Error al iniciar sesión");
+      setError(result.error || t("login.failed"));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   }
@@ -61,8 +62,8 @@ export default function LoginScreen() {
             <Ionicons name="musical-notes" size={48} color={Colors.dark.primary} />
           </View>
 
-          <Text style={styles.title}>Bienvenido</Text>
-          <Text style={styles.subtitle}>Inicia sesión en tu cuenta</Text>
+          <Text style={styles.title}>{t("login.welcome")}</Text>
+          <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
 
           {!!error && (
             <View style={styles.errorContainer}>
@@ -76,7 +77,7 @@ export default function LoginScreen() {
               <Ionicons name="person-outline" size={20} color={Colors.dark.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Nombre de usuario"
+                placeholder={t("login.username")}
                 placeholderTextColor={Colors.dark.textTertiary}
                 value={username}
                 onChangeText={setUsername}
@@ -89,7 +90,7 @@ export default function LoginScreen() {
               <Ionicons name="lock-closed-outline" size={20} color={Colors.dark.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Contraseña"
+                placeholder={t("login.password")}
                 placeholderTextColor={Colors.dark.textTertiary}
                 value={password}
                 onChangeText={setPassword}
@@ -117,16 +118,16 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color={Colors.dark.background} />
             ) : (
-              <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              <Text style={styles.loginButtonText}>{t("login.signIn")}</Text>
             )}
           </Pressable>
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>¿No tienes cuenta?</Text>
+          <Text style={styles.footerText}>{t("login.noAccount")}</Text>
           <Link href="/(auth)/register" asChild>
             <Pressable>
-              <Text style={styles.linkText}>Crear cuenta</Text>
+              <Text style={styles.linkText}>{t("login.createAccount")}</Text>
             </Pressable>
           </Link>
         </View>
