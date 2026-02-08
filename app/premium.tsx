@@ -112,8 +112,18 @@ export default function PremiumScreen() {
         </View>
 
         <View style={styles.priceContainer}>
-          <Text style={styles.priceAmount}>$4.99</Text>
-          <Text style={styles.pricePeriod}>/ mes</Text>
+          <View style={styles.priceOption}>
+            <Text style={styles.priceAmount}>$1.99</Text>
+            <Text style={styles.pricePeriod}>/ mes</Text>
+          </View>
+          <View style={styles.priceDivider} />
+          <View style={styles.priceOption}>
+            <View style={styles.saveBadge}>
+              <Text style={styles.saveText}>Ahorra 58%</Text>
+            </View>
+            <Text style={styles.priceAmount}>$9.99</Text>
+            <Text style={styles.pricePeriod}>/ año</Text>
+          </View>
         </View>
 
         <View style={styles.featuresContainer}>
@@ -225,18 +235,39 @@ const styles = StyleSheet.create({
   },
   priceContainer: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     justifyContent: "center",
     marginTop: 20,
-    gap: 4,
+    gap: 20,
+  },
+  priceOption: {
+    alignItems: "center",
+    gap: 2,
+  },
+  priceDivider: {
+    width: 1,
+    height: 50,
+    backgroundColor: Colors.dark.border,
+  },
+  saveBadge: {
+    backgroundColor: Colors.dark.accentMuted,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  saveText: {
+    fontSize: 10,
+    fontWeight: "700" as const,
+    color: Colors.dark.accent,
   },
   priceAmount: {
-    fontSize: 42,
+    fontSize: 32,
     fontWeight: "800" as const,
     color: Colors.dark.premium,
   },
   pricePeriod: {
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.dark.textSecondary,
   },
   featuresContainer: {

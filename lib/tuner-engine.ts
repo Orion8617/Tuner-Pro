@@ -231,7 +231,7 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
   }
   rms = Math.sqrt(rms / size);
 
-  if (rms < 0.008) return -1;
+  if (rms < 0.02) return -1;
 
   let r1 = 0;
   let r2 = size - 1;
@@ -280,6 +280,9 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
 
   if (maxpos < 1 || maxpos >= size - 1) return -1;
 
+  const confidence = maxval / c[0];
+  if (confidence < 0.5) return -1;
+
   let T0 = maxpos;
 
   const x1 = c[T0 - 1] || 0;
@@ -297,4 +300,76 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
   if (frequency < 50 || frequency > 500) return -1;
 
   return frequency;
+}
+
+export class FrequencyStabilizer {
+  private history: number[] = [];
+  private readonly maxHistory: number;
+  private readonly stabilityThresholdCents: number;
+  private readonly minReadings: number;
+  private silenceCount = 0;
+  private readonly silenceThreshold: number;
+
+  constructor(
+    maxHistory = 6,
+    stabilityThresholdCents = 80,
+    minReadings = 3,
+    silenceThreshold = 8
+  ) {
+    this.maxHistory = maxHistory;
+    this.stabilityThresholdCents = stabilityThresholdCents;
+    this.minReadings = minReadings;
+    this.silenceThreshold = silenceThreshold;
+  }
+
+  push(frequency: number): number | null {
+    if (frequency <= 0) {
+      this.silenceCount++;
+      if (this.silenceCount >= this.silenceThreshold) {
+        this.history = [];
+        return null;
+      }
+      return this.history.length >= this.minReadings ? this.getMedian() : null;
+    }
+
+    this.silenceCount = 0;
+
+    if (this.history.length > 0) {
+      const lastFreq = this.history[this.history.length - 1];
+      const centsDiff = Math.abs(1200 * Math.log2(frequency / lastFreq));
+      if (centsDiff > 400) {
+        this.history = [frequency];
+        return null;
+      }
+    }
+
+    this.history.push(frequency);
+    if (this.history.length > this.maxHistory) {
+      this.history.shift();
+    }
+
+    if (this.history.length < this.minReadings) return null;
+
+    const sorted = [...this.history].sort((a, b) => a - b);
+    const minFreq = sorted[0];
+    const maxFreq = sorted[sorted.length - 1];
+    const rangeCents = 1200 * Math.log2(maxFreq / minFreq);
+
+    if (rangeCents > this.stabilityThresholdCents) return null;
+
+    return this.getMedian();
+  }
+
+  private getMedian(): number {
+    const sorted = [...this.history].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  }
+
+  reset() {
+    this.history = [];
+    this.silenceCount = 0;
+  }
 }

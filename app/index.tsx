@@ -35,6 +35,7 @@ import {
   getCentsFromTarget,
   getTuningStatus,
   autoCorrelate,
+  FrequencyStabilizer,
 } from "@/lib/tuner-engine";
 
 export default function TunerScreen() {
@@ -58,6 +59,8 @@ export default function TunerScreen() {
   const nativeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastHapticRef = useRef<number>(0);
   const wasInTuneRef = useRef(false);
+  const stabilizerRef = useRef(new FrequencyStabilizer());
+  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pulseAnim = useSharedValue(1);
   const micButtonScale = useSharedValue(1);
@@ -136,6 +139,12 @@ export default function TunerScreen() {
   const stopListening = useCallback(() => {
     setIsListening(false);
     wasInTuneRef.current = false;
+    stabilizerRef.current.reset();
+
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
 
     if (nativeIntervalRef.current) {
       clearInterval(nativeIntervalRef.current);
@@ -173,29 +182,45 @@ export default function TunerScreen() {
     if (!analyser || !audioContext) return;
 
     const buffer = new Float32Array(analyser.fftSize);
+    stabilizerRef.current.reset();
 
     function tick() {
       if (!analyserRef.current) return;
       analyserRef.current.getFloatTimeDomainData(buffer);
 
-      const frequency = autoCorrelate(buffer, audioContext!.sampleRate);
+      const rawFrequency = autoCorrelate(buffer, audioContext!.sampleRate);
+      const stableFrequency = stabilizerRef.current.push(rawFrequency);
 
-      if (frequency > 50 && frequency < 500) {
-        const noteInfo = frequencyToNote(frequency);
-        const closest = findClosestString(frequency, currentTuning.strings);
+      if (stableFrequency !== null && stableFrequency > 50 && stableFrequency < 500) {
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
 
-        setDetectedFrequency(frequency);
+        const noteInfo = frequencyToNote(stableFrequency);
+        const closest = findClosestString(stableFrequency, currentTuning.strings);
+
+        setDetectedFrequency(stableFrequency);
         setDetectedNote(noteInfo.note);
         setDetectedOctave(noteInfo.octave);
         setDetectedString(closest);
 
         if (closest) {
-          const c = getCentsFromTarget(frequency, closest.frequency);
+          const c = getCentsFromTarget(stableFrequency, closest.frequency);
           setCents(c);
           triggerInTuneHaptic(c);
         } else {
           setCents(noteInfo.cents);
         }
+      } else if (rawFrequency <= 0 && !silenceTimeoutRef.current) {
+        silenceTimeoutRef.current = setTimeout(() => {
+          setDetectedFrequency(0);
+          setDetectedNote(null);
+          setDetectedOctave(null);
+          setDetectedString(null);
+          setCents(0);
+          silenceTimeoutRef.current = null;
+        }, 800);
       }
 
       rafRef.current = requestAnimationFrame(tick);
