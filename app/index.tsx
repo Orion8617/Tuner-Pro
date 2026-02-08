@@ -5,7 +5,6 @@ import {
   Pressable,
   StyleSheet,
   Platform,
-  AppState,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -52,6 +51,7 @@ export default function TunerScreen() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const nativeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const pulseAnim = useSharedValue(1);
   const micButtonScale = useSharedValue(1);
@@ -118,6 +118,11 @@ export default function TunerScreen() {
   const stopListening = useCallback(() => {
     setIsListening(false);
 
+    if (nativeIntervalRef.current) {
+      clearInterval(nativeIntervalRef.current);
+      nativeIntervalRef.current = null;
+    }
+
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -180,9 +185,12 @@ export default function TunerScreen() {
   }
 
   function simulateNativeTuning() {
+    if (nativeIntervalRef.current) {
+      clearInterval(nativeIntervalRef.current);
+    }
     const target = selectedString || STANDARD_TUNING[0];
     let tick = 0;
-    const interval = setInterval(() => {
+    nativeIntervalRef.current = setInterval(() => {
       tick++;
       const variation = Math.sin(tick * 0.1) * 30 + (Math.random() - 0.5) * 10;
       const freq = target.frequency * Math.pow(2, variation / 1200);
@@ -193,18 +201,6 @@ export default function TunerScreen() {
       setCents(Math.round(variation));
       setDetectedString(target);
     }, 100);
-
-    const checkState = () => {
-      if (!isListening) {
-        clearInterval(interval);
-      }
-    };
-    const timer = setInterval(checkState, 500);
-
-    return () => {
-      clearInterval(interval);
-      clearInterval(timer);
-    };
   }
 
   function toggleListening() {
