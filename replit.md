@@ -2,11 +2,20 @@
 
 ## Overview
 
-GuitarTune is a mobile guitar tuner application built with Expo (React Native). It uses the device microphone to detect pitch and helps users tune their guitar strings. The app features real-time frequency detection via autocorrelation, a visual tuner dial, string selection, and a premium tier system. The UI is in Spanish. It includes a backend Express server for API support and uses a PostgreSQL database with Drizzle ORM for user management.
+GuitarTune is a mobile guitar tuner application built with Expo (React Native). It uses the device microphone to detect pitch and helps users tune their guitar strings. The app features real-time frequency detection via autocorrelation, a visual tuner dial, string selection, and a premium tier system. The UI supports bilingual English/Spanish with auto-detection. It includes a backend Express server for API support and uses a PostgreSQL database with Drizzle ORM for user management.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Recent Changes
+
+- **2026-02-08**: Added bilingual i18n system (`lib/i18n.ts`) with 68+ translation keys, auto-detects device locale (English primary, Spanish secondary)
+- **2026-02-08**: Translated all UI from Spanish to English as primary language
+- **2026-02-08**: Added competitive price comparison table to premium screen (vs other tuner apps)
+- **2026-02-08**: Redesigned landing page (`server/templates/landing-page.html`) with dark theme, competitive messaging, tuning showcase, and pricing
+- **2026-02-08**: Added ASO description to `app.json` for US/Europe market targeting
+- **2026-02-08**: Installed `expo-localization` for device locale detection
 
 ## System Architecture
 
@@ -16,12 +25,20 @@ Preferred communication style: Simple, everyday language.
 - **Navigation structure**: 
   - `app/index.tsx` — Main tuner screen (home)
   - `app/(auth)/` — Auth flow (login/register) presented as modal
-  - `app/premium.tsx` — Premium upsell screen presented as modal
+  - `app/premium.tsx` — Premium upsell screen with competitive comparison
   - `app/_layout.tsx` — Root layout with Stack navigator
 - **State management**: React Context for auth (`lib/auth-context.tsx`), React Query (`@tanstack/react-query`) for server state
 - **Styling**: Dark theme only (light theme mirrors dark in `constants/colors.ts`), using `react-native-reanimated` for animations
 - **Fonts**: DM Sans (loaded via `@expo-google-fonts/dm-sans`)
-- **Key libraries**: `react-native-reanimated`, `react-native-gesture-handler`, `react-native-keyboard-controller`, `expo-haptics`, `expo-linear-gradient`
+- **Key libraries**: `react-native-reanimated`, `react-native-gesture-handler`, `react-native-keyboard-controller`, `expo-haptics`, `expo-linear-gradient`, `expo-localization`
+
+### Internationalization (`lib/i18n.ts`)
+
+- Uses `expo-localization` `getLocales()` for device language detection
+- Supports English (primary) and Spanish (secondary)
+- 68+ translation keys covering tuner, premium, auth, and tuning selector UI
+- Type-safe `t()` function with `TranslationKey` type
+- Falls back to English for unsupported languages
 
 ### Tuner Engine (`lib/tuner-engine.ts`)
 
@@ -35,9 +52,11 @@ Preferred communication style: Simple, everyday language.
 - Haptic feedback (vibration) triggers when within ±5 cents of target frequency
 
 ### Pricing (Premium)
-- Monthly: $1.99/mes
-- Annual: $9.99/año (58% ahorro)
+- Monthly: $1.99/month
+- Annual: $9.99/year (58% savings)
 - Payment via LemonSqueezy (URL needs real product link for production)
+- Competitive positioning: 78% cheaper than GuitarTuna ($9/month)
+- Premium screen includes comparison table vs competitor apps (ads, price, bloat)
 - Audio input handled via Web Audio API (`AudioContext`) in `app/index.tsx`
 
 ### Authentication
@@ -55,6 +74,7 @@ Preferred communication style: Simple, everyday language.
 - **Storage**: `server/storage.ts` — In-memory storage (`MemStorage`) implementing `IStorage` interface with user CRUD operations
 - **Build**: Uses `esbuild` to bundle for production (`server_dist/`)
 - **Static serving**: Serves Expo web build in production, proxies to Metro in development
+- **Landing page**: `server/templates/landing-page.html` — Dark-themed marketing page with competitive comparison, tuning showcase, pricing cards, QR code for Expo Go
 
 ### Database (PostgreSQL + Drizzle ORM)
 
@@ -69,8 +89,9 @@ Preferred communication style: Simple, everyday language.
 
 - **Shared schema**: `shared/schema.ts` is shared between server and client for type safety
 - **Path aliases**: `@/*` maps to root, `@shared/*` maps to `./shared/*`
-- **Separation of concerns**: Tuner logic is isolated in `lib/tuner-engine.ts`, UI components are modular (`TunerDial`, `NoteDisplay`, `StringSelector`)
+- **Separation of concerns**: Tuner logic is isolated in `lib/tuner-engine.ts`, UI components are modular (`TunerDial`, `NoteDisplay`, `StringSelector`, `TuningSelector`)
 - **Error handling**: Custom `ErrorBoundary` component with fallback UI and app restart capability
+- **i18n**: All user-facing strings go through `t()` from `lib/i18n.ts`
 
 ### Scripts
 
@@ -82,7 +103,14 @@ Preferred communication style: Simple, everyday language.
 ## External Dependencies
 
 - **PostgreSQL**: Required for user data persistence (via `DATABASE_URL` environment variable). Currently schema-only; in-memory storage is the active implementation.
-- **Expo ecosystem**: Extensive use of Expo modules (haptics, crypto, secure-store, image, linear-gradient, web-browser, splash-screen)
+- **Expo ecosystem**: Extensive use of Expo modules (haptics, crypto, secure-store, image, linear-gradient, web-browser, splash-screen, localization)
 - **Replit environment**: Server relies on `REPLIT_DEV_DOMAIN`, `REPLIT_DOMAINS`, and `REPLIT_INTERNAL_APP_DOMAIN` for CORS and URL configuration
 - **Device microphone**: Core functionality requires microphone access for pitch detection (permissions configured in `app.json` for both iOS and Android)
 - **No external APIs or third-party services** are currently integrated beyond the local PostgreSQL database
+
+## Market Strategy
+
+- **Target markets**: US and Europe (English-speaking users)
+- **Positioning**: "No ads, no bloat, fair price" — 78% cheaper than competitors
+- **ASO keywords**: guitar tuner, no ads, drop d tuner, accurate tuner, open g tuning
+- **Freemium model**: Standard + 3 alternative tunings free, 6 premium tunings for $1.99/mo or $9.99/yr
