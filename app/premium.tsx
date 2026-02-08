@@ -1,13 +1,15 @@
-import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Alert } from "react-native";
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Alert, ActivityIndicator } from "react-native";
+import { useState, useCallback } from "react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
 import { t } from "@/lib/i18n";
+import { apiRequest } from "@/lib/query-client";
 
 function getFeatures() {
   return [
@@ -52,44 +54,92 @@ function getFeatures() {
 
 export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
-  const { user, upgradeToPremium } = useAuth();
+  const { user, upgradeToPremium, checkSubscriptionStatus } = useAuth();
+  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual">("annual");
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  async function handlePurchase() {
+  const handlePurchase = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    if (!user) {
+      if (Platform.OS === "web") {
+        alert(t("premium.loginRequired"));
+      } else {
+        Alert.alert("", t("premium.loginRequired"));
+      }
+      router.push("/(auth)/login");
+      return;
+    }
+
+    setIsProcessing(true);
+
     try {
-      await WebBrowser.openBrowserAsync("https://lemonsqueezy.com", {
+      const res = await apiRequest("GET", `/api/checkout/url?plan=${selectedPlan}&userId=${encodeURIComponent(user.id)}`);
+      const data = await res.json();
+
+      if (!data.checkoutUrl) {
+        throw new Error("No checkout URL");
+      }
+
+      await WebBrowser.openBrowserAsync(data.checkoutUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
       });
 
-      if (Platform.OS === "web") {
-        const confirmed = confirm(t("premium.confirmWeb"));
-        if (confirmed) {
-          await upgradeToPremium();
+      setIsProcessing(true);
+      let attempts = 0;
+      const maxAttempts = 6;
+
+      const checkPayment = async () => {
+        const isPremium = await checkSubscriptionStatus();
+        if (isPremium) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setIsProcessing(false);
           router.back();
+          return;
         }
-      } else {
-        Alert.alert(
-          t("premium.alertTitle"),
-          t("premium.alertMessage"),
-          [
-            { text: t("premium.no"), style: "cancel" },
-            {
-              text: t("premium.yes"),
-              onPress: async () => {
-                await upgradeToPremium();
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                router.back();
-              },
-            },
-          ]
-        );
-      }
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(checkPayment, 3000);
+        } else {
+          setIsProcessing(false);
+          if (Platform.OS === "web") {
+            const confirmed = confirm(t("premium.confirmWeb"));
+            if (confirmed) {
+              await upgradeToPremium();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.back();
+            }
+          } else {
+            Alert.alert(
+              t("premium.alertTitle"),
+              t("premium.alertMessage"),
+              [
+                { text: t("premium.no"), style: "cancel" },
+                {
+                  text: t("premium.yes"),
+                  onPress: async () => {
+                    await upgradeToPremium();
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    router.back();
+                  },
+                },
+              ]
+            );
+          }
+        }
+      };
+
+      setTimeout(checkPayment, 2000);
     } catch (e) {
-      console.error("Browser error:", e);
+      console.error("Purchase error:", e);
+      setIsProcessing(false);
+      if (Platform.OS === "web") {
+        alert(t("premium.error"));
+      } else {
+        Alert.alert("", t("premium.error"));
+      }
     }
-  }
+  }, [user, selectedPlan, checkSubscriptionStatus, upgradeToPremium]);
 
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === "web" ? 67 : 0 }]}>
@@ -114,19 +164,42 @@ export default function PremiumScreen() {
           </Text>
         </View>
 
-        <View style={styles.priceContainer}>
-          <View style={styles.priceOption}>
-            <Text style={styles.priceAmount}>$1.99</Text>
-            <Text style={styles.pricePeriod}>{t("premium.perMonth")}</Text>
-          </View>
-          <View style={styles.priceDivider} />
-          <View style={styles.priceOption}>
+        <View style={styles.planSelector}>
+          <Pressable
+            style={[styles.planCard, selectedPlan === "monthly" && styles.planCardActive]}
+            onPress={() => { setSelectedPlan("monthly"); Haptics.selectionAsync(); }}
+          >
+            <Text style={[styles.planLabel, selectedPlan === "monthly" && styles.planLabelActive]}>
+              {t("premium.monthly")}
+            </Text>
+            <Text style={[styles.planPrice, selectedPlan === "monthly" && styles.planPriceActive]}>
+              $1.99
+            </Text>
+            <Text style={[styles.planPeriod, selectedPlan === "monthly" && styles.planPeriodActive]}>
+              {t("premium.perMonth")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.planCard, selectedPlan === "annual" && styles.planCardActive]}
+            onPress={() => { setSelectedPlan("annual"); Haptics.selectionAsync(); }}
+          >
+            <View style={styles.bestValueBadge}>
+              <Text style={styles.bestValueText}>{t("premium.bestValue")}</Text>
+            </View>
+            <Text style={[styles.planLabel, selectedPlan === "annual" && styles.planLabelActive]}>
+              {t("premium.annual")}
+            </Text>
+            <Text style={[styles.planPrice, selectedPlan === "annual" && styles.planPriceActive]}>
+              $9.99
+            </Text>
+            <Text style={[styles.planPeriod, selectedPlan === "annual" && styles.planPeriodActive]}>
+              {t("premium.perYear")}
+            </Text>
             <View style={styles.saveBadge}>
               <Text style={styles.saveText}>{t("premium.save")}</Text>
             </View>
-            <Text style={styles.priceAmount}>$9.99</Text>
-            <Text style={styles.pricePeriod}>{t("premium.perYear")}</Text>
-          </View>
+          </Pressable>
         </View>
 
         <View style={styles.compareSection}>
@@ -220,6 +293,7 @@ export default function PremiumScreen() {
               pressed && styles.purchaseButtonPressed,
             ]}
             onPress={handlePurchase}
+            disabled={isProcessing}
           >
             <LinearGradient
               colors={[Colors.dark.premiumGradientStart, Colors.dark.premiumGradientEnd]}
@@ -227,8 +301,19 @@ export default function PremiumScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Ionicons name="diamond" size={20} color="#000" />
-              <Text style={styles.purchaseText}>{t("premium.subscribe")}</Text>
+              {isProcessing ? (
+                <>
+                  <ActivityIndicator size="small" color="#000" />
+                  <Text style={styles.purchaseText}>{t("premium.processing")}</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="diamond" size={20} color="#000" />
+                  <Text style={styles.purchaseText}>
+                    {t("premium.subscribe")} — {selectedPlan === "monthly" ? "$1.99/mo" : "$9.99/yr"}
+                  </Text>
+                </>
+              )}
             </LinearGradient>
           </Pressable>
         )}
@@ -280,42 +365,77 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
     textAlign: "center",
   },
-  priceContainer: {
+  planSelector: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 20,
-    gap: 20,
+    gap: 12,
+    marginTop: 24,
   },
-  priceOption: {
+  planCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: Colors.dark.surface,
+    borderWidth: 2,
+    borderColor: Colors.dark.border,
     alignItems: "center",
-    gap: 2,
+    gap: 4,
   },
-  priceDivider: {
-    width: 1,
-    height: 50,
-    backgroundColor: Colors.dark.border,
+  planCardActive: {
+    borderColor: Colors.dark.primary,
+    backgroundColor: Colors.dark.primaryMuted,
+  },
+  planLabel: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: Colors.dark.textSecondary,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+  },
+  planLabelActive: {
+    color: Colors.dark.primary,
+  },
+  planPrice: {
+    fontSize: 28,
+    fontWeight: "800" as const,
+    color: Colors.dark.textSecondary,
+    marginTop: 4,
+  },
+  planPriceActive: {
+    color: Colors.dark.premium,
+  },
+  planPeriod: {
+    fontSize: 13,
+    color: Colors.dark.textTertiary,
+  },
+  planPeriodActive: {
+    color: Colors.dark.textSecondary,
+  },
+  bestValueBadge: {
+    position: "absolute",
+    top: -10,
+    backgroundColor: Colors.dark.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  bestValueText: {
+    fontSize: 10,
+    fontWeight: "700" as const,
+    color: "#000",
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.3,
   },
   saveBadge: {
     backgroundColor: Colors.dark.accentMuted,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
-    marginBottom: 4,
+    marginTop: 4,
   },
   saveText: {
     fontSize: 10,
     fontWeight: "700" as const,
     color: Colors.dark.accent,
-  },
-  priceAmount: {
-    fontSize: 32,
-    fontWeight: "800" as const,
-    color: Colors.dark.premium,
-  },
-  pricePeriod: {
-    fontSize: 14,
-    color: Colors.dark.textSecondary,
   },
   featuresContainer: {
     marginTop: 28,

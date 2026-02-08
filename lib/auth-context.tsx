@@ -1,7 +1,9 @@
-import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import { t } from "@/lib/i18n";
+import { getApiUrl } from "@/lib/query-client";
+import { fetch } from "expo/fetch";
 
 interface User {
   id: string;
@@ -17,6 +19,7 @@ interface AuthContextValue {
   register: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   upgradeToPremium: () => Promise<void>;
+  checkSubscriptionStatus: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -53,7 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userData = await AsyncStorage.getItem(CURRENT_USER_KEY);
       if (userData) {
-        setUser(JSON.parse(userData));
+        const parsed = JSON.parse(userData);
+        setUser(parsed);
+        checkServerSubscription(parsed.id, parsed);
       }
     } catch (e) {
       console.error("Failed to load user:", e);
@@ -61,6 +66,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }
+
+  async function checkServerSubscription(userId: string, currentUser: User) {
+    try {
+      const baseUrl = getApiUrl();
+      const url = new URL(`/api/subscription/status?userId=${encodeURIComponent(userId)}`, baseUrl);
+      const res = await fetch(url.toString());
+      if (res.ok) {
+        const data = await res.json();
+        if (data.isPremium && !currentUser.isPremium) {
+          const updated = { ...currentUser, isPremium: true };
+          setUser(updated);
+          await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updated));
+          const users = await getStoredUsers();
+          const userKey = currentUser.username.toLowerCase();
+          if (users[userKey]) {
+            users[userKey].isPremium = true;
+            await saveUsers(users);
+          }
+        }
+      }
+    } catch (e) {
+      // Server check failed, keep local state
+    }
+  }
+
+  const checkSubscriptionStatus = useCallback(async (): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const baseUrl = getApiUrl();
+      const url = new URL(`/api/subscription/status?userId=${encodeURIComponent(user.id)}`, baseUrl);
+      const res = await fetch(url.toString());
+      if (res.ok) {
+        const data = await res.json();
+        if (data.isPremium && !user.isPremium) {
+          await upgradeToPremiumLocal();
+        }
+        return data.isPremium;
+      }
+    } catch (e) {
+      // Server unreachable
+    }
+    return user.isPremium;
+  }, [user]);
 
   async function login(username: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
@@ -86,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedInUser));
       setUser(loggedInUser);
+      checkServerSubscription(loggedInUser.id, loggedInUser);
       return { success: true };
     } catch (e) {
       return { success: false, error: t("authContext.loginError") };
@@ -136,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  async function upgradeToPremium() {
+  async function upgradeToPremiumLocal() {
     if (!user) return;
     const updatedUser = { ...user, isPremium: true };
     setUser(updatedUser);
@@ -150,6 +199,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function upgradeToPremium() {
+    await upgradeToPremiumLocal();
+  }
+
   const value = useMemo(() => ({
     user,
     isLoading,
@@ -157,7 +210,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     logout,
     upgradeToPremium,
-  }), [user, isLoading]);
+    checkSubscriptionStatus,
+  }), [user, isLoading, checkSubscriptionStatus]);
 
   return (
     <AuthContext.Provider value={value}>
