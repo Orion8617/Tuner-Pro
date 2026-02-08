@@ -25,9 +25,19 @@ Preferred communication style: Simple, everyday language.
 
 ### Tuner Engine (`lib/tuner-engine.ts`)
 
-- Implements autocorrelation-based pitch detection (`autoCorrelate` function)
-- Supports standard guitar tuning (E2, A2, D3, G3, B2, E4)
+- Implements autocorrelation-based pitch detection (`autoCorrelate` function) with confidence validation
+- Supports 10 guitar tunings: Standard + 3 free (Double Drop D, Open C, All Fourths) + 6 premium (Drop D, Open G, DADGAD, Open D, Open E, Drop C)
+- `TuningConfig` interface defines each tuning with id, name, shortName, strings, isPremium, genre
+- `FrequencyStabilizer` class provides noise filtering: median filter over 6 readings, rejects unstable/noisy frequencies, auto-clears after silence
+- RMS threshold at 0.02 and autocorrelation confidence > 0.5 to reject ambient noise
 - Provides `frequencyToNote`, `findClosestString`, `getCentsFromTarget`, and `getTuningStatus` utilities
+- `findClosestString` accepts optional tuning parameter (defaults to STANDARD_TUNING)
+- Haptic feedback (vibration) triggers when within ±5 cents of target frequency
+
+### Pricing (Premium)
+- Monthly: $1.99/mes
+- Annual: $9.99/año (58% ahorro)
+- Payment via LemonSqueezy (URL needs real product link for production)
 - Audio input handled via Web Audio API (`AudioContext`) in `app/index.tsx`
 
 ### Authentication
