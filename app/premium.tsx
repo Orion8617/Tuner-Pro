@@ -10,15 +10,15 @@ import { useAuth } from "@/lib/auth-context";
 
 const FEATURES = [
   {
-    icon: "speedometer" as const,
-    title: "Detección Avanzada",
-    desc: "Algoritmo de alta precisión para detección de frecuencia",
+    icon: "musical-notes" as const,
+    title: "6 Afinaciones Premium",
+    desc: "Drop D, Open G, DADGAD, Open D, Open E, Drop C",
     free: false,
   },
   {
-    icon: "musical-notes" as const,
-    title: "Afinaciones Alternativas",
-    desc: "Drop D, Open G, DADGAD y más",
+    icon: "speedometer" as const,
+    title: "Detección Avanzada",
+    desc: "Algoritmo de alta precisión para graves y agudos",
     free: false,
   },
   {
@@ -34,15 +34,15 @@ const FEATURES = [
     free: false,
   },
   {
-    icon: "volume-high" as const,
-    title: "Tonos de Referencia",
-    desc: "Reproduce tonos para cada cuerda",
+    icon: "radio" as const,
+    title: "Afinador Estándar",
+    desc: "Detección de afinación estándar con vibración",
     free: true,
   },
   {
-    icon: "radio" as const,
-    title: "Afinador Básico",
-    desc: "Detección de afinación estándar",
+    icon: "git-branch" as const,
+    title: "3 Afinaciones Gratis",
+    desc: "Double Drop D, Open C, All Fourths",
     free: true,
   },
 ];

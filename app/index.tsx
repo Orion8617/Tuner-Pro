@@ -9,7 +9,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useSharedValue,
@@ -25,12 +25,15 @@ import { useAuth } from "@/lib/auth-context";
 import TunerDial from "@/components/TunerDial";
 import NoteDisplay from "@/components/NoteDisplay";
 import StringSelector from "@/components/StringSelector";
+import TuningSelector from "@/components/TuningSelector";
 import {
-  STANDARD_TUNING,
+  ALL_TUNINGS,
+  TuningConfig,
   GuitarString,
   frequencyToNote,
   findClosestString,
   getCentsFromTarget,
+  getTuningStatus,
   autoCorrelate,
 } from "@/lib/tuner-engine";
 
@@ -38,6 +41,7 @@ export default function TunerScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
+  const [currentTuning, setCurrentTuning] = useState<TuningConfig>(ALL_TUNINGS[0]);
   const [isListening, setIsListening] = useState(false);
   const [selectedString, setSelectedString] = useState<GuitarString | null>(null);
   const [detectedNote, setDetectedNote] = useState<string | null>(null);
@@ -52,6 +56,8 @@ export default function TunerScreen() {
   const rafRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const nativeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastHapticRef = useRef<number>(0);
+  const wasInTuneRef = useRef(false);
 
   const pulseAnim = useSharedValue(1);
   const micButtonScale = useSharedValue(1);
@@ -79,6 +85,18 @@ export default function TunerScreen() {
   const micScale = useAnimatedStyle(() => ({
     transform: [{ scale: micButtonScale.value }],
   }));
+
+  function triggerInTuneHaptic(currentCents: number) {
+    const now = Date.now();
+    const isInTune = Math.abs(currentCents) <= 5;
+
+    if (isInTune && !wasInTuneRef.current && now - lastHapticRef.current > 600) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      lastHapticRef.current = now;
+    }
+
+    wasInTuneRef.current = isInTune;
+  }
 
   const startListening = useCallback(async () => {
     if (Platform.OS !== "web") {
@@ -117,6 +135,7 @@ export default function TunerScreen() {
 
   const stopListening = useCallback(() => {
     setIsListening(false);
+    wasInTuneRef.current = false;
 
     if (nativeIntervalRef.current) {
       clearInterval(nativeIntervalRef.current);
@@ -161,9 +180,9 @@ export default function TunerScreen() {
 
       const frequency = autoCorrelate(buffer, audioContext!.sampleRate);
 
-      if (frequency > 60 && frequency < 1200) {
+      if (frequency > 50 && frequency < 500) {
         const noteInfo = frequencyToNote(frequency);
-        const closest = findClosestString(frequency);
+        const closest = findClosestString(frequency, currentTuning.strings);
 
         setDetectedFrequency(frequency);
         setDetectedNote(noteInfo.note);
@@ -173,6 +192,7 @@ export default function TunerScreen() {
         if (closest) {
           const c = getCentsFromTarget(frequency, closest.frequency);
           setCents(c);
+          triggerInTuneHaptic(c);
         } else {
           setCents(noteInfo.cents);
         }
@@ -188,7 +208,7 @@ export default function TunerScreen() {
     if (nativeIntervalRef.current) {
       clearInterval(nativeIntervalRef.current);
     }
-    const target = selectedString || STANDARD_TUNING[0];
+    const target = selectedString || currentTuning.strings[0];
     let tick = 0;
     nativeIntervalRef.current = setInterval(() => {
       tick++;
@@ -198,8 +218,10 @@ export default function TunerScreen() {
       setDetectedFrequency(freq);
       setDetectedNote(noteInfo.note);
       setDetectedOctave(noteInfo.octave);
-      setCents(Math.round(variation));
+      const roundedVar = Math.round(variation);
+      setCents(roundedVar);
       setDetectedString(target);
+      triggerInTuneHaptic(roundedVar);
     }, 100);
   }
 
@@ -219,6 +241,16 @@ export default function TunerScreen() {
 
   function handleStringSelect(s: GuitarString) {
     setSelectedString(s);
+  }
+
+  function handleTuningSelect(tuning: TuningConfig) {
+    setCurrentTuning(tuning);
+    setSelectedString(null);
+    setDetectedString(null);
+    setDetectedNote(null);
+    setDetectedOctave(null);
+    setDetectedFrequency(0);
+    setCents(0);
   }
 
   const targetFreq = selectedString?.frequency || detectedString?.frequency || null;
@@ -313,17 +345,19 @@ export default function TunerScreen() {
 
       <View style={[styles.stringArea, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 }]}>
         <StringSelector
-          strings={STANDARD_TUNING}
+          strings={currentTuning.strings}
           selectedString={selectedString}
           detectedString={detectedString}
           onSelect={handleStringSelect}
           isListening={isListening}
         />
 
-        <View style={styles.tuningLabel}>
-          <MaterialCommunityIcons name="guitar-acoustic" size={16} color={Colors.dark.textTertiary} />
-          <Text style={styles.tuningText}>Afinación Estándar</Text>
-        </View>
+        <TuningSelector
+          currentTuning={currentTuning}
+          onSelect={handleTuningSelect}
+          isPremiumUser={!!user?.isPremium}
+          onPremiumRequired={() => router.push("/premium")}
+        />
       </View>
     </View>
   );
@@ -415,16 +449,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
     gap: 12,
-  },
-  tuningLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingBottom: 4,
-  },
-  tuningText: {
-    fontSize: 12,
-    color: Colors.dark.textTertiary,
   },
 });
