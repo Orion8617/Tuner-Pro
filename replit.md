@@ -51,10 +51,13 @@ Preferred communication style: Simple, everyday language.
 - `findClosestString` accepts optional tuning parameter (defaults to STANDARD_TUNING)
 - Haptic feedback (vibration) triggers when within ±5 cents of target frequency
 
-### Pricing (Premium)
+### Pricing & Payment (LemonSqueezy)
 - Monthly: $1.99/month
 - Annual: $9.99/year (58% savings)
-- Payment via LemonSqueezy (URL needs real product link for production)
+- **Payment flow**: User selects plan (monthly/annual) → app calls `/api/checkout/url` to get checkout URL with user_id → opens LemonSqueezy checkout in browser → webhook confirms payment → app polls `/api/subscription/status` to verify
+- **Webhook endpoint**: `POST /api/webhooks/lemonsqueezy` — verifies HMAC-SHA256 signature, handles subscription_created, subscription_updated, subscription_cancelled, subscription_expired, subscription_paused, subscription_resumed events
+- **Environment variables needed**: `LEMONSQUEEZY_WEBHOOK_SECRET`, `LEMONSQUEEZY_CHECKOUT_URL_MONTHLY`, `LEMONSQUEEZY_CHECKOUT_URL_ANNUAL`, `LEMONSQUEEZY_VARIANT_ANNUAL`
+- **Fallback**: If webhook hasn't arrived after 18s of polling, falls back to manual confirmation dialog
 - Competitive positioning: 78% cheaper than GuitarTuna ($9/month)
 - Premium screen includes comparison table vs competitor apps (ads, price, bloat)
 - Audio input handled via Web Audio API (`AudioContext`) in `app/index.tsx`
