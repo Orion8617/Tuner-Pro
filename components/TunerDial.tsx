@@ -16,9 +16,11 @@ import Colors from "@/constants/colors";
 interface TunerDialProps {
   cents: number;
   isActive: boolean;
+  size?: number;
 }
 
-export default function TunerDial({ cents, isActive }: TunerDialProps) {
+export default function TunerDial({ cents, isActive, size = 260 }: TunerDialProps) {
+  const DIAL = size;
   const needleRotation = useSharedValue(0);
   const glowOpacity = useSharedValue(0);
   const glowPulse = useSharedValue(1);
@@ -64,7 +66,7 @@ export default function TunerDial({ cents, isActive }: TunerDialProps) {
     const color = interpolateColor(
       Math.abs(needleRotation.value),
       [0, 5, 20, 50],
-      [Colors.dark.inTune, Colors.dark.inTune, Colors.dark.ochre, Colors.dark.needleRed]
+      [Colors.dark.neon, Colors.dark.neon, Colors.dark.ochre, Colors.dark.needleRed]
     );
     return { backgroundColor: color };
   });
@@ -78,7 +80,7 @@ export default function TunerDial({ cents, isActive }: TunerDialProps) {
     const color = interpolateColor(
       glowOpacity.value,
       [0, 1],
-      ["rgba(200, 169, 110, 0.0)", "rgba(141, 181, 128, 0.15)"]
+      ["rgba(57, 255, 20, 0.0)", "rgba(57, 255, 20, 0.1)"]
     );
     return { backgroundColor: color };
   });
@@ -90,20 +92,20 @@ export default function TunerDial({ cents, isActive }: TunerDialProps) {
     const isQuarter = Math.abs(i) === 5;
     const isEdge = Math.abs(i) === 10;
 
-    let height = 12;
+    let height = DIAL * 0.046;
     let width = 1;
     let color = "rgba(212, 165, 116, 0.2)";
 
     if (isMajor) {
-      height = 28;
+      height = DIAL * 0.108;
       width = 2.5;
-      color = Colors.dark.inTune;
+      color = Colors.dark.neon;
     } else if (isEdge) {
-      height = 22;
+      height = DIAL * 0.085;
       width = 2;
       color = Colors.dark.needleRed;
     } else if (isQuarter) {
-      height = 18;
+      height = DIAL * 0.069;
       width = 1.5;
       color = Colors.dark.ochre;
     }
@@ -111,10 +113,16 @@ export default function TunerDial({ cents, isActive }: TunerDialProps) {
     tickMarks.push(
       <View
         key={i}
-        style={[
-          styles.tickContainer,
-          { transform: [{ rotate: `${angle}deg` }] },
-        ]}
+        style={{
+          position: "absolute" as const,
+          top: DIAL * 0.046,
+          width: 3,
+          height: DIAL / 2 - DIAL * 0.046,
+          alignItems: "center" as const,
+          left: DIAL / 2 - 1.5,
+          transformOrigin: "center bottom",
+          transform: [{ rotate: `${angle}deg` }],
+        }}
       >
         <View
           style={{
@@ -129,29 +137,145 @@ export default function TunerDial({ cents, isActive }: TunerDialProps) {
   }
 
   return (
-    <View style={styles.container}>
-      <Animated.View style={[styles.inTuneGlow, glowStyle]} />
+    <View style={{ width: DIAL + 50, height: (DIAL + 50) / 2 + 30, alignItems: "center", justifyContent: "flex-end" }}>
+      <Animated.View
+        style={[
+          {
+            position: "absolute",
+            width: DIAL + 40,
+            height: DIAL + 40,
+            borderRadius: (DIAL + 40) / 2,
+            bottom: -((DIAL + 40) / 2) + 30,
+            backgroundColor: "rgba(57, 255, 20, 0.06)",
+            borderWidth: 1,
+            borderColor: "rgba(57, 255, 20, 0.15)",
+          },
+          glowStyle,
+        ]}
+      />
 
-      <View style={styles.dialOuter}>
-        <View style={styles.dialBezel}>
-          <View style={styles.dialFace}>
-            <Animated.View style={[styles.dialCenterGlow, centerGlowStyle]} />
+      <View
+        style={{
+          position: "absolute",
+          bottom: -(DIAL / 2) + 30,
+          width: DIAL + 12,
+          height: DIAL + 12,
+          borderRadius: (DIAL + 12) / 2,
+          backgroundColor: Colors.dark.woodLight,
+          alignItems: "center",
+          justifyContent: "center",
+          ...(Platform.OS === "web"
+            ? { boxShadow: "inset 0 2px 6px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.5)" }
+            : {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.5,
+                shadowRadius: 12,
+                elevation: 10,
+              }),
+        }}
+      >
+        <View
+          style={{
+            width: DIAL + 6,
+            height: DIAL + 6,
+            borderRadius: (DIAL + 6) / 2,
+            backgroundColor: Colors.dark.surfaceHighlight,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "rgba(212, 165, 116, 0.15)",
+          }}
+        >
+          <View
+            style={{
+              width: DIAL,
+              height: DIAL,
+              borderRadius: DIAL / 2,
+              backgroundColor: Colors.dark.soundHole,
+              alignItems: "center",
+              overflow: "hidden",
+              borderWidth: 1,
+              borderColor: "rgba(212, 165, 116, 0.08)",
+            }}
+          >
+            <Animated.View style={[StyleSheet.absoluteFillObject, { borderRadius: DIAL / 2 }, centerGlowStyle]} />
 
-            <View style={styles.dialLabelsRow}>
-              <Text style={styles.dialLabelFlat}>b</Text>
-              <Text style={styles.dialLabelSharp}>#</Text>
+            <View
+              style={{
+                position: "absolute",
+                top: DIAL / 2 - DIAL * 0.115,
+                left: 0,
+                right: 0,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingHorizontal: DIAL * 0.135,
+              }}
+            >
+              <Text style={[styles.dialLabelFlat, { fontSize: DIAL * 0.062 }]}>b</Text>
+              <Text style={[styles.dialLabelSharp, { fontSize: DIAL * 0.062 }]}>{"#"}</Text>
             </View>
 
             {tickMarks}
 
-            <Animated.View style={[styles.needlePivot, needleStyle]}>
-              <Animated.View style={[styles.needle, needleColorStyle]} />
+            <Animated.View
+              style={[
+                {
+                  position: "absolute",
+                  bottom: DIAL / 2 - 6,
+                  width: 6,
+                  height: DIAL / 2 - DIAL * 0.108,
+                  alignItems: "center",
+                  transformOrigin: "center bottom",
+                },
+                needleStyle,
+              ]}
+            >
+              <Animated.View style={[{ width: 2.5, height: "100%" as any, borderRadius: 1.5 }, needleColorStyle]} />
               <View style={styles.needleShadow} />
             </Animated.View>
 
-            <View style={styles.pivotCap}>
-              <View style={styles.pivotCapInner} />
-              <View style={styles.pivotCapDot} />
+            <View
+              style={{
+                position: "absolute",
+                bottom: DIAL / 2 - DIAL * 0.054,
+                width: DIAL * 0.108,
+                height: DIAL * 0.108,
+                borderRadius: DIAL * 0.054,
+                backgroundColor: Colors.dark.surfaceHighlight,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1.5,
+                borderColor: "rgba(212, 165, 116, 0.2)",
+                ...(Platform.OS === "web"
+                  ? { boxShadow: "0 2px 6px rgba(0,0,0,0.3)" }
+                  : {
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 4,
+                    }),
+              }}
+            >
+              <View
+                style={{
+                  width: DIAL * 0.062,
+                  height: DIAL * 0.062,
+                  borderRadius: DIAL * 0.031,
+                  backgroundColor: Colors.dark.woodMedium,
+                  borderWidth: 1,
+                  borderColor: "rgba(212, 165, 116, 0.1)",
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  width: 4,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: Colors.dark.brass,
+                }}
+              />
             </View>
           </View>
         </View>
@@ -160,109 +284,15 @@ export default function TunerDial({ cents, isActive }: TunerDialProps) {
   );
 }
 
-const DIAL_SIZE = 260;
-
 const styles = StyleSheet.create({
-  container: {
-    width: DIAL_SIZE + 50,
-    height: (DIAL_SIZE + 50) / 2 + 30,
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  inTuneGlow: {
-    position: "absolute",
-    width: DIAL_SIZE + 40,
-    height: DIAL_SIZE + 40,
-    borderRadius: (DIAL_SIZE + 40) / 2,
-    bottom: -((DIAL_SIZE + 40) / 2) + 30,
-    backgroundColor: "rgba(141, 181, 128, 0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(141, 181, 128, 0.2)",
-  },
-  dialOuter: {
-    position: "absolute",
-    bottom: -(DIAL_SIZE / 2) + 30,
-    width: DIAL_SIZE + 12,
-    height: DIAL_SIZE + 12,
-    borderRadius: (DIAL_SIZE + 12) / 2,
-    backgroundColor: Colors.dark.woodLight,
-    alignItems: "center",
-    justifyContent: "center",
-    ...(Platform.OS === "web"
-      ? { boxShadow: "inset 0 2px 6px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.5)" }
-      : {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.5,
-          shadowRadius: 12,
-          elevation: 10,
-        }),
-  },
-  dialBezel: {
-    width: DIAL_SIZE + 6,
-    height: DIAL_SIZE + 6,
-    borderRadius: (DIAL_SIZE + 6) / 2,
-    backgroundColor: Colors.dark.surfaceHighlight,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(212, 165, 116, 0.15)",
-  },
-  dialFace: {
-    width: DIAL_SIZE,
-    height: DIAL_SIZE,
-    borderRadius: DIAL_SIZE / 2,
-    backgroundColor: Colors.dark.surface,
-    alignItems: "center",
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(212, 165, 116, 0.08)",
-  },
-  dialCenterGlow: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: DIAL_SIZE / 2,
-  },
-  dialLabelsRow: {
-    position: "absolute",
-    top: DIAL_SIZE / 2 - 30,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 35,
-  },
   dialLabelFlat: {
-    fontSize: 16,
     color: Colors.dark.textTertiary,
     fontWeight: "600" as const,
     fontStyle: "italic" as const,
   },
   dialLabelSharp: {
-    fontSize: 16,
     color: Colors.dark.textTertiary,
     fontWeight: "600" as const,
-  },
-  tickContainer: {
-    position: "absolute",
-    top: 12,
-    width: 3,
-    height: DIAL_SIZE / 2 - 12,
-    alignItems: "center",
-    left: DIAL_SIZE / 2 - 1.5,
-    transformOrigin: "center bottom",
-  },
-  needlePivot: {
-    position: "absolute",
-    bottom: DIAL_SIZE / 2 - 6,
-    width: 6,
-    height: DIAL_SIZE / 2 - 28,
-    alignItems: "center",
-    transformOrigin: "center bottom",
-  },
-  needle: {
-    width: 2.5,
-    height: "100%" as any,
-    borderRadius: 1.5,
   },
   needleShadow: {
     position: "absolute",
@@ -272,42 +302,5 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.2)",
     left: 3,
     top: 2,
-  },
-  pivotCap: {
-    position: "absolute",
-    bottom: DIAL_SIZE / 2 - 14,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.dark.surfaceHighlight,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "rgba(212, 165, 116, 0.2)",
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 2px 6px rgba(0,0,0,0.3)" }
-      : {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-        }),
-  },
-  pivotCapInner: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.dark.woodMedium,
-    borderWidth: 1,
-    borderColor: "rgba(212, 165, 116, 0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pivotCapDot: {
-    position: "absolute",
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.dark.brass,
   },
 });
