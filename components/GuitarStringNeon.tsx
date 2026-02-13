@@ -24,7 +24,15 @@ interface GuitarStringNeonProps {
   bridgeY: number;
 }
 
-const STRING_THICKNESSES = [3.5, 3, 2.5, 2, 1.5, 1.2];
+const STRING_THICKNESSES = [4.0, 3.4, 2.8, 2.2, 1.6, 1.3];
+const STRING_COLORS_IDLE = [
+  Colors.dark.stringWound,
+  Colors.dark.stringWound,
+  Colors.dark.stringWound,
+  Colors.dark.stringSteel,
+  Colors.dark.stringSteel,
+  Colors.dark.stringSteel,
+];
 
 export default function GuitarStringNeon({
   stringIndex,
@@ -39,16 +47,16 @@ export default function GuitarStringNeon({
   bridgeY,
 }: GuitarStringNeonProps) {
   const thickness = STRING_THICKNESSES[stringIndex] || 2;
+  const baseColor = STRING_COLORS_IDLE[stringIndex] || Colors.dark.stringSteel;
   const stringHeight = bridgeY - headstockY;
   const glowSectionHeight = soundHoleTopY - headstockY;
 
   const glowProgress = useSharedValue(0);
   const glowOpacity = useSharedValue(0);
   const stringBrightness = useSharedValue(0);
-  const labelOpacity = useSharedValue(0);
-  const labelScale = useSharedValue(0.5);
   const neonPulse = useSharedValue(1);
   const vibrate = useSharedValue(0);
+  const labelGlow = useSharedValue(0);
 
   useEffect(() => {
     if (isInTune) {
@@ -58,9 +66,8 @@ export default function GuitarStringNeon({
         duration: 500,
         easing: Easing.out(Easing.cubic),
       });
-      labelOpacity.value = withDelay(350, withTiming(1, { duration: 250 }));
-      labelScale.value = withDelay(350, withTiming(1, { duration: 300 }));
       vibrate.value = withTiming(0, { duration: 100 });
+      labelGlow.value = withDelay(300, withTiming(1, { duration: 300 }));
       neonPulse.value = withDelay(
         600,
         withRepeat(
@@ -73,16 +80,15 @@ export default function GuitarStringNeon({
         )
       );
     } else if (isDetected) {
-      stringBrightness.value = withTiming(0.5, { duration: 200 });
+      stringBrightness.value = withTiming(0.6, { duration: 200 });
       glowOpacity.value = withTiming(0, { duration: 300 });
       glowProgress.value = withTiming(0, { duration: 400 });
-      labelOpacity.value = withTiming(0, { duration: 200 });
-      labelScale.value = withTiming(0.5, { duration: 200 });
       neonPulse.value = withTiming(1, { duration: 200 });
+      labelGlow.value = withTiming(0, { duration: 200 });
       vibrate.value = withRepeat(
         withSequence(
-          withTiming(-1, { duration: 40 }),
-          withTiming(1, { duration: 40 })
+          withTiming(-1.5, { duration: 35 }),
+          withTiming(1.5, { duration: 35 })
         ),
         -1,
         true
@@ -91,9 +97,8 @@ export default function GuitarStringNeon({
       stringBrightness.value = withTiming(0.8, { duration: 400 });
       glowOpacity.value = withTiming(0.5, { duration: 500 });
       glowProgress.value = withTiming(1, { duration: 300 });
-      labelOpacity.value = withTiming(0.7, { duration: 300 });
-      labelScale.value = withTiming(1, { duration: 300 });
       vibrate.value = withTiming(0, { duration: 100 });
+      labelGlow.value = withTiming(0.7, { duration: 300 });
       neonPulse.value = withRepeat(
         withSequence(
           withTiming(0.5, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
@@ -106,16 +111,19 @@ export default function GuitarStringNeon({
       stringBrightness.value = withTiming(0, { duration: 400 });
       glowOpacity.value = withTiming(0, { duration: 400 });
       glowProgress.value = withTiming(0, { duration: 500 });
-      labelOpacity.value = withTiming(0, { duration: 200 });
-      labelScale.value = withTiming(0.5, { duration: 200 });
       neonPulse.value = withTiming(1, { duration: 200 });
       vibrate.value = withTiming(0, { duration: 100 });
+      labelGlow.value = withTiming(0, { duration: 200 });
     }
   }, [isInTune, isDetected, wasTuned]);
 
   const stringStyle = useAnimatedStyle(() => ({
-    opacity: 0.25 + stringBrightness.value * 0.75,
+    opacity: 0.5 + stringBrightness.value * 0.5,
     transform: [{ translateX: vibrate.value }],
+  }));
+
+  const stringHighlightStyle = useAnimatedStyle(() => ({
+    opacity: 0.15 + stringBrightness.value * 0.3,
   }));
 
   const glowBeamStyle = useAnimatedStyle(() => ({
@@ -128,13 +136,12 @@ export default function GuitarStringNeon({
     opacity: glowOpacity.value * 0.4 * neonPulse.value,
   }));
 
-  const labelAnimStyle = useAnimatedStyle(() => ({
-    opacity: labelOpacity.value,
-    transform: [{ scale: labelScale.value }],
+  const labelGlowStyle = useAnimatedStyle(() => ({
+    opacity: labelGlow.value,
   }));
 
-  const glowWidth = thickness + 4;
-  const haloWidth = thickness + 14;
+  const glowWidth = thickness + 6;
+  const haloWidth = thickness + 18;
 
   return (
     <>
@@ -146,10 +153,25 @@ export default function GuitarStringNeon({
             top: headstockY,
             width: thickness,
             height: stringHeight,
-            backgroundColor: Colors.dark.amber,
+            backgroundColor: baseColor,
             borderRadius: thickness / 2,
           },
           stringStyle,
+        ]}
+      />
+
+      <Animated.View
+        style={[
+          {
+            position: "absolute" as const,
+            left: xPosition - (thickness * 0.3) / 2,
+            top: headstockY,
+            width: thickness * 0.3,
+            height: stringHeight,
+            backgroundColor: Colors.dark.stringHighlight,
+            borderRadius: thickness * 0.15,
+          },
+          stringHighlightStyle,
         ]}
       />
 
@@ -161,15 +183,15 @@ export default function GuitarStringNeon({
           width: haloWidth,
           height: glowSectionHeight,
           overflow: "hidden" as const,
+          pointerEvents: "none" as const,
         }}
-        pointerEvents="none"
       >
         <Animated.View
           style={[
             {
               position: "absolute" as const,
               bottom: 0,
-              left: (haloWidth - haloWidth) / 2,
+              left: 0,
               width: haloWidth,
               backgroundColor: Colors.dark.neonGlow,
               borderRadius: haloWidth / 2,
@@ -192,34 +214,63 @@ export default function GuitarStringNeon({
         />
       </View>
 
+      <View
+        style={{
+          position: "absolute" as const,
+          left: xPosition - 12,
+          top: headstockY - 22,
+          width: 24,
+          height: 18,
+          borderRadius: 4,
+          backgroundColor: "rgba(26, 18, 11, 0.8)",
+          borderWidth: 1,
+          borderColor: "rgba(212, 165, 116, 0.2)",
+          alignItems: "center" as const,
+          justifyContent: "center" as const,
+        }}
+      >
+        <Text
+          style={{
+            color: Colors.dark.amber,
+            fontSize: 10,
+            fontWeight: "700" as const,
+            letterSpacing: 0.3,
+            fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
+          }}
+        >
+          {note}
+        </Text>
+      </View>
+
       <Animated.View
         style={[
           {
             position: "absolute" as const,
-            left: xPosition - 16,
-            top: headstockY - 28,
-            width: 32,
-            height: 24,
-            borderRadius: 6,
+            left: xPosition - 12,
+            top: headstockY - 22,
+            width: 24,
+            height: 18,
+            borderRadius: 4,
             backgroundColor: "rgba(57, 255, 20, 0.15)",
             borderWidth: 1,
             borderColor: Colors.dark.neonSoft,
             alignItems: "center" as const,
             justifyContent: "center" as const,
           },
-          labelAnimStyle,
+          labelGlowStyle,
+          { pointerEvents: "none" as const },
         ]}
       >
         <Text
           style={{
             color: Colors.dark.neon,
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: "800" as const,
-            letterSpacing: 0.5,
+            letterSpacing: 0.3,
             fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
           }}
         >
-          {note}{stringNumber}
+          {note}
         </Text>
       </Animated.View>
     </>
