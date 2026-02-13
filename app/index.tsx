@@ -26,6 +26,7 @@ import { useAuth } from "@/lib/auth-context";
 import { t } from "@/lib/i18n";
 import TunerDial from "@/components/TunerDial";
 import TuningSelector from "@/components/TuningSelector";
+import PitchDetectorBridge from "@/components/PitchDetectorBridge";
 import {
   ALL_TUNINGS,
   TuningConfig,
@@ -69,7 +70,6 @@ export default function TunerScreen() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const nativeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastHapticRef = useRef<number>(0);
   const wasInTuneRef = useRef(false);
   const stabilizerRef = useRef(new FrequencyStabilizer());
@@ -132,10 +132,40 @@ export default function TunerScreen() {
     wasInTuneRef.current = inTune;
   }
 
+  const handleNativePitch = useCallback((data: { frequency: number; note: string; octave: number; cents: number }) => {
+    if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
+    const freq = data.frequency;
+    const closest = findClosestString(freq, currentTuning.strings);
+    setDetectedFrequency(freq);
+    setDetectedNote(data.note);
+    setDetectedOctave(data.octave);
+    setDetectedString(closest);
+    if (closest) {
+      const c = getCentsFromTarget(freq, closest.frequency);
+      setCents(c);
+      triggerInTuneHaptic(c);
+    } else {
+      setCents(data.cents);
+    }
+  }, [currentTuning]);
+
+  const handleNativeSilence = useCallback(() => {
+    if (!silenceTimeoutRef.current) {
+      silenceTimeoutRef.current = setTimeout(() => {
+        setDetectedFrequency(0); setDetectedNote(null); setDetectedOctave(null);
+        setDetectedString(null); setCents(0); silenceTimeoutRef.current = null;
+      }, 800);
+    }
+  }, []);
+
+  const handleNativeError = useCallback((msg: string) => {
+    setPermissionDenied(true);
+    setIsListening(false);
+  }, []);
+
   const startListening = useCallback(async () => {
     if (Platform.OS !== "web") {
       setIsListening(true);
-      simulateNativeTuning();
       return;
     }
     try {
@@ -163,7 +193,6 @@ export default function TunerScreen() {
     wasInTuneRef.current = false;
     stabilizerRef.current.reset();
     if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
-    if (nativeIntervalRef.current) { clearInterval(nativeIntervalRef.current); nativeIntervalRef.current = null; }
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
     if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
@@ -209,25 +238,6 @@ export default function TunerScreen() {
     tick();
   }
 
-  function simulateNativeTuning() {
-    if (nativeIntervalRef.current) clearInterval(nativeIntervalRef.current);
-    const target = currentTuning.strings[0];
-    let tick = 0;
-    nativeIntervalRef.current = setInterval(() => {
-      tick++;
-      const variation = Math.sin(tick * 0.1) * 30 + (Math.random() - 0.5) * 10;
-      const freq = target.frequency * Math.pow(2, variation / 1200);
-      const noteInfo = frequencyToNote(freq);
-      setDetectedFrequency(freq);
-      setDetectedNote(noteInfo.note);
-      setDetectedOctave(noteInfo.octave);
-      const roundedVar = Math.round(variation);
-      setCents(roundedVar);
-      const closest = findClosestString(freq, currentTuning.strings);
-      setDetectedString(closest);
-      triggerInTuneHaptic(roundedVar);
-    }, 100);
-  }
 
   function toggleListening() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -261,6 +271,13 @@ export default function TunerScreen() {
   return (
     <View style={[styles.container, { backgroundColor: BG }]}>
       <StatusBar style="light" />
+
+      <PitchDetectorBridge
+        isListening={isListening}
+        onPitchDetected={handleNativePitch}
+        onSilence={handleNativeSilence}
+        onError={handleNativeError}
+      />
 
       {/* ===== TOP BAR ===== */}
       <View style={[styles.topBar, { top: safeTop }]}>
