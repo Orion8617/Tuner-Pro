@@ -231,7 +231,7 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
   }
   rms = Math.sqrt(rms / size);
 
-  if (rms < 0.02) return -1;
+  if (rms < 0.06) return -1;
 
   let r1 = 0;
   let r2 = size - 1;
@@ -281,7 +281,7 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
   if (maxpos < 1 || maxpos >= size - 1) return -1;
 
   const confidence = maxval / c[0];
-  if (confidence < 0.5) return -1;
+  if (confidence < 0.7) return -1;
 
   let T0 = maxpos;
 
@@ -311,10 +311,10 @@ export class FrequencyStabilizer {
   private readonly silenceThreshold: number;
 
   constructor(
-    maxHistory = 6,
-    stabilityThresholdCents = 80,
-    minReadings = 3,
-    silenceThreshold = 8
+    maxHistory = 8,
+    stabilityThresholdCents = 50,
+    minReadings = 4,
+    silenceThreshold = 10
   ) {
     this.maxHistory = maxHistory;
     this.stabilityThresholdCents = stabilityThresholdCents;
