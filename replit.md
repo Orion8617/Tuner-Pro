@@ -10,6 +10,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- **2026-02-13**: Added 3-tier pricing model: Monthly ($1.99/mo), Annual ($9.99/yr), Lifetime ($14.99 one-time) with full i18n support and backend webhook handling for lifetime purchases
 - **2026-02-13**: Complete UI redesign to professional digital tuner aesthetic — dark theme (#0A0A0A) with cyan/teal accent (#4AEDC4), large semicircular dial meter (41 outer segments, 81 inner ticks, color-coded zones), LCD-style frequency/cents displays, big note character (72px), horizontal string selector with frequencies, vertical string visualization at bottom, compact mic button with tuning selector
 - **2026-02-08**: Added bilingual i18n system (`lib/i18n.ts`) with 68+ translation keys, auto-detects device locale (English primary, Spanish secondary)
 - **2026-02-08**: Translated all UI from Spanish to English as primary language
@@ -55,9 +56,10 @@ Preferred communication style: Simple, everyday language.
 ### Pricing & Payment (LemonSqueezy)
 - Monthly: $1.99/month
 - Annual: $9.99/year (58% savings)
-- **Payment flow**: User selects plan (monthly/annual) → app calls `/api/checkout/url` to get checkout URL with user_id → opens LemonSqueezy checkout in browser → webhook confirms payment → app polls `/api/subscription/status` to verify
-- **Webhook endpoint**: `POST /api/webhooks/lemonsqueezy` — verifies HMAC-SHA256 signature, handles subscription_created, subscription_updated, subscription_cancelled, subscription_expired, subscription_paused, subscription_resumed events
-- **Environment variables needed**: `LEMONSQUEEZY_WEBHOOK_SECRET`, `LEMONSQUEEZY_CHECKOUT_URL_MONTHLY`, `LEMONSQUEEZY_CHECKOUT_URL_ANNUAL`, `LEMONSQUEEZY_VARIANT_ANNUAL`
+- Lifetime: $14.99 one-time purchase (forever access)
+- **Payment flow**: User selects plan (monthly/annual/lifetime) → app calls `/api/checkout/url` to get checkout URL with user_id → opens LemonSqueezy checkout in browser → webhook confirms payment → app polls `/api/subscription/status` to verify
+- **Webhook endpoint**: `POST /api/webhooks/lemonsqueezy` — verifies HMAC-SHA256 signature, handles subscription_created, subscription_updated, subscription_cancelled, subscription_expired, subscription_paused, subscription_resumed, order_created (for lifetime) events
+- **Environment variables needed**: `LEMONSQUEEZY_WEBHOOK_SECRET`, `LEMONSQUEEZY_CHECKOUT_URL_MONTHLY`, `LEMONSQUEEZY_CHECKOUT_URL_ANNUAL`, `LEMONSQUEEZY_CHECKOUT_URL_LIFETIME`, `LEMONSQUEEZY_VARIANT_ANNUAL`, `LEMONSQUEEZY_VARIANT_LIFETIME`
 - **Fallback**: If webhook hasn't arrived after 18s of polling, falls back to manual confirmation dialog
 - Competitive positioning: 78% cheaper than GuitarTuna ($9/month)
 - Premium screen includes comparison table vs competitor apps (ads, price, bloat)
