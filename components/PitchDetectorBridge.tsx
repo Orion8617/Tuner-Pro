@@ -1,6 +1,12 @@
 import { useRef, useCallback, useEffect } from "react";
 import { View, Platform } from "react-native";
-import { WebView } from "react-native-webview";
+
+let WebView: any = null;
+if (Platform.OS !== "web") {
+  try {
+    WebView = require("react-native-webview").WebView;
+  } catch {}
+}
 
 interface PitchData {
   frequency: number;
@@ -197,7 +203,7 @@ export default function PitchDetectorBridge({
   onError,
   onReady,
 }: PitchDetectorBridgeProps) {
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<any>(null);
   const wasListening = useRef(false);
 
   useEffect(() => {
@@ -206,7 +212,7 @@ export default function PitchDetectorBridge({
     if (isListening && !wasListening.current) {
       setTimeout(() => {
         webViewRef.current?.postMessage(JSON.stringify({ command: "start" }));
-      }, 300);
+      }, 500);
     } else if (!isListening && wasListening.current) {
       webViewRef.current?.postMessage(JSON.stringify({ command: "stop" }));
     }
@@ -233,10 +239,10 @@ export default function PitchDetectorBridge({
     } catch {}
   }, [onPitchDetected, onSilence, onError, onReady]);
 
-  if (Platform.OS === "web") return null;
+  if (Platform.OS === "web" || !WebView) return null;
 
   return (
-    <View style={{ width: 0, height: 0, overflow: "hidden", position: "absolute" }}>
+    <View style={{ width: 0, height: 0, overflow: "hidden", position: "absolute" }} pointerEvents="none">
       <WebView
         ref={webViewRef}
         source={{ html: PITCH_DETECTOR_HTML }}
@@ -246,7 +252,7 @@ export default function PitchDetectorBridge({
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         mediaCapturePermissionGrantType="grant"
-        style={{ width: 1, height: 1 }}
+        style={{ width: 1, height: 1, opacity: 0 }}
       />
     </View>
   );
