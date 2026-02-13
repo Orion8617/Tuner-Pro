@@ -398,39 +398,26 @@ export default function TunerScreen() {
             const thicknesses = [3.5, 3, 2.5, 2, 1.5, 1.2];
             const thickness = thicknesses[i] || 2;
             const xPos = stringSpacing * (i + 1);
+            const baseColor = isActive
+              ? (isInTune ? ACCENT : statusColor)
+              : isTuned ? ACCENT_MED : "rgba(255,255,255,0.12)";
 
             return (
-              <View key={str.stringNumber}>
-                <View
-                  style={{
-                    position: "absolute" as const,
-                    left: xPos - thickness / 2,
-                    top: 0,
-                    width: thickness,
-                    height: "100%" as any,
-                    backgroundColor: isActive
-                      ? (isInTune ? ACCENT : statusColor)
-                      : isTuned ? ACCENT_MED : "rgba(255,255,255,0.08)",
-                    borderRadius: thickness / 2,
-                    ...(isActive && Platform.OS === "web"
-                      ? { boxShadow: `0 0 ${isInTune ? 12 : 6}px ${isInTune ? ACCENT_DIM : "rgba(255,255,255,0.05)"}` }
-                      : {}),
-                  }}
-                />
-                {isActive && (
-                  <View
-                    style={{
-                      position: "absolute" as const,
-                      left: xPos - thickness * 0.15,
-                      top: 0,
-                      width: thickness * 0.3,
-                      height: "100%" as any,
-                      backgroundColor: "rgba(255,255,255,0.3)",
-                      borderRadius: thickness * 0.15,
-                    }}
-                  />
-                )}
-              </View>
+              <View
+                key={str.stringNumber}
+                style={{
+                  position: "absolute" as const,
+                  left: xPos - thickness / 2,
+                  top: 0,
+                  bottom: 0,
+                  width: thickness,
+                  backgroundColor: baseColor,
+                  borderRadius: thickness / 2,
+                  ...(isActive && Platform.OS === "web"
+                    ? { boxShadow: `0 0 ${isInTune ? 12 : 6}px ${isInTune ? ACCENT_DIM : "rgba(255,255,255,0.05)"}` }
+                    : {}),
+                }}
+              />
             );
           })}
         </View>
