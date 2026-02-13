@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, Platform } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -19,7 +19,15 @@ interface TunerDialProps {
   size?: number;
 }
 
-export default function TunerDial({ cents, isActive, size = 260 }: TunerDialProps) {
+const ACCENT = "#4AEDC4";
+const ACCENT_DIM = "rgba(74, 237, 196, 0.15)";
+const ACCENT_MED = "rgba(74, 237, 196, 0.35)";
+const ACCENT_GLOW = "rgba(74, 237, 196, 0.06)";
+const RED = "#FF4444";
+const RED_DIM = "rgba(255, 68, 68, 0.3)";
+const ORANGE = "#FF9544";
+
+export default function TunerDial({ cents, isActive, size = 300 }: TunerDialProps) {
   const DIAL = size;
   const needleRotation = useSharedValue(0);
   const glowOpacity = useSharedValue(0);
@@ -29,18 +37,17 @@ export default function TunerDial({ cents, isActive, size = 260 }: TunerDialProp
     if (isActive) {
       const clampedCents = Math.max(-50, Math.min(50, cents));
       needleRotation.value = withSpring(clampedCents, {
-        damping: 22,
-        stiffness: 80,
-        mass: 0.5,
+        damping: 18,
+        stiffness: 90,
+        mass: 0.4,
       });
       const inTune = Math.abs(cents) <= 5;
       glowOpacity.value = withSpring(inTune ? 1 : 0, { damping: 15, stiffness: 80 });
-
       if (inTune) {
         glowPulse.value = withRepeat(
           withSequence(
-            withTiming(1.04, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-            withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) })
+            withTiming(0.7, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+            withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) })
           ),
           -1,
           true
@@ -56,208 +63,227 @@ export default function TunerDial({ cents, isActive, size = 260 }: TunerDialProp
   }, [cents, isActive]);
 
   const needleStyle = useAnimatedStyle(() => {
-    const rotation = interpolate(needleRotation.value, [-50, 0, 50], [-45, 0, 45]);
-    return {
-      transform: [{ rotate: `${rotation}deg` }],
-    };
+    const rotation = interpolate(needleRotation.value, [-50, 0, 50], [-65, 0, 65]);
+    return { transform: [{ rotate: `${rotation}deg` }] };
   });
 
   const needleColorStyle = useAnimatedStyle(() => {
     const color = interpolateColor(
       Math.abs(needleRotation.value),
-      [0, 5, 20, 50],
-      [Colors.dark.neon, Colors.dark.neon, Colors.dark.ochre, Colors.dark.needleRed]
+      [0, 5, 25, 50],
+      [ACCENT, ACCENT, ORANGE, RED]
     );
     return { backgroundColor: color };
   });
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value * 0.5,
-    transform: [{ scale: glowPulse.value }],
+  const inTuneGlowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value * glowPulse.value,
   }));
 
-  const centerGlowStyle = useAnimatedStyle(() => {
-    const color = interpolateColor(
-      glowOpacity.value,
-      [0, 1],
-      ["rgba(57, 255, 20, 0.0)", "rgba(57, 255, 20, 0.08)"]
-    );
-    return { backgroundColor: color };
-  });
+  const TOTAL_SEGMENTS = 41;
+  const ARC_SPAN = 130;
+  const START_ANGLE = -ARC_SPAN / 2 - 90;
+  const outerRadius = DIAL / 2;
+  const segmentHeight = DIAL * 0.065;
+  const segmentWidth = 4;
+  const segmentGap = ARC_SPAN / TOTAL_SEGMENTS;
 
-  const tickMarks = [];
-  for (let i = -10; i <= 10; i++) {
-    const angle = (i / 10) * 45;
-    const isMajor = i === 0;
-    const isQuarter = Math.abs(i) === 5;
-    const isEdge = Math.abs(i) === 10;
+  const segments = [];
+  for (let i = 0; i < TOTAL_SEGMENTS; i++) {
+    const angle = START_ANGLE + i * segmentGap + segmentGap / 2;
+    const normalizedPos = i / (TOTAL_SEGMENTS - 1);
+    const distFromCenter = Math.abs(normalizedPos - 0.5) * 2;
 
-    let height = DIAL * 0.042;
-    let width = 1;
-    let color = "rgba(200, 192, 176, 0.15)";
+    const isCenterZone = distFromCenter < 0.15;
+    const isMidZone = distFromCenter < 0.5;
+    const isEdgeZone = distFromCenter > 0.85;
 
-    if (isMajor) {
-      height = DIAL * 0.1;
-      width = 2.5;
-      color = Colors.dark.neon;
-    } else if (isEdge) {
-      height = DIAL * 0.08;
-      width = 2;
-      color = Colors.dark.needleRed;
-    } else if (isQuarter) {
-      height = DIAL * 0.065;
-      width = 1.5;
-      color = Colors.dark.ochre;
+    let color = "rgba(74, 237, 196, 0.12)";
+    let h = segmentHeight;
+    let w = segmentWidth;
+
+    if (isCenterZone) {
+      color = ACCENT;
+      h = segmentHeight * 1.5;
+      w = 5;
+    } else if (isMidZone) {
+      color = ACCENT_MED;
+      h = segmentHeight * 1.15;
+    } else if (isEdgeZone) {
+      color = RED_DIM;
+      h = segmentHeight * 1.3;
+      w = 5;
     }
 
-    tickMarks.push(
+    segments.push(
       <View
-        key={i}
+        key={`seg-${i}`}
         style={{
           position: "absolute" as const,
-          top: DIAL * 0.04,
-          width: 3,
-          height: DIAL / 2 - DIAL * 0.04,
+          left: outerRadius - w / 2,
+          top: 0,
+          width: w,
+          height: outerRadius,
           alignItems: "center" as const,
-          left: DIAL / 2 - 1.5,
-          transformOrigin: "center bottom",
+          transformOrigin: `${w / 2}px ${outerRadius}px`,
           transform: [{ rotate: `${angle}deg` }],
         }}
       >
         <View
           style={{
-            height,
-            width,
+            width: w,
+            height: h,
             backgroundColor: color,
-            borderRadius: width / 2,
+            borderRadius: 2,
           }}
         />
       </View>
     );
   }
 
-  return (
-    <View style={{ width: DIAL, height: DIAL / 2 + 10, alignItems: "center", justifyContent: "flex-end" }}>
-      <Animated.View
-        style={[
-          {
-            position: "absolute",
-            width: DIAL + 20,
-            height: DIAL + 20,
-            borderRadius: (DIAL + 20) / 2,
-            bottom: -((DIAL + 20) / 2) + 10,
-            backgroundColor: "rgba(57, 255, 20, 0.05)",
-            borderWidth: 1,
-            borderColor: "rgba(57, 255, 20, 0.12)",
-          },
-          glowStyle,
-        ]}
-      />
+  const innerSegments = [];
+  const INNER_TOTAL = 81;
+  const innerSegmentH = DIAL * 0.03;
+  const innerOffset = segmentHeight * 1.5 + 6;
 
+  for (let i = 0; i < INNER_TOTAL; i++) {
+    const angle = START_ANGLE + (i / (INNER_TOTAL - 1)) * ARC_SPAN;
+    const normalizedPos = i / (INNER_TOTAL - 1);
+    const distFromCenter = Math.abs(normalizedPos - 0.5) * 2;
+
+    let color = "rgba(74, 237, 196, 0.06)";
+    if (distFromCenter < 0.12) color = "rgba(74, 237, 196, 0.25)";
+    else if (distFromCenter > 0.85) color = "rgba(255, 68, 68, 0.15)";
+
+    innerSegments.push(
+      <View
+        key={`inner-${i}`}
+        style={{
+          position: "absolute" as const,
+          left: outerRadius - 1,
+          top: innerOffset,
+          width: 2,
+          height: outerRadius - innerOffset,
+          alignItems: "center" as const,
+          transformOrigin: `1px ${outerRadius - innerOffset}px`,
+          transform: [{ rotate: `${angle}deg` }],
+        }}
+      >
+        <View
+          style={{
+            width: i % 4 === 0 ? 2 : 1,
+            height: i % 4 === 0 ? innerSegmentH * 1.4 : innerSegmentH,
+            backgroundColor: color,
+            borderRadius: 1,
+          }}
+        />
+      </View>
+    );
+  }
+
+  const needleLength = outerRadius - DIAL * 0.18;
+
+  return (
+    <View style={{ width: DIAL, height: DIAL / 2 + 20, alignItems: "center", overflow: "hidden" }}>
       <View
         style={{
-          position: "absolute",
-          bottom: -(DIAL / 2) + 10,
           width: DIAL,
           height: DIAL,
           borderRadius: DIAL / 2,
-          backgroundColor: Colors.dark.soundHole,
           alignItems: "center",
-          overflow: "hidden",
+          justifyContent: "center",
+          backgroundColor: "transparent",
         }}
       >
-        <Animated.View style={[StyleSheet.absoluteFillObject, { borderRadius: DIAL / 2 }, centerGlowStyle]} />
+        <Animated.View
+          style={[
+            {
+              position: "absolute",
+              width: DIAL + 30,
+              height: DIAL + 30,
+              borderRadius: (DIAL + 30) / 2,
+              backgroundColor: ACCENT_GLOW,
+              borderWidth: 1.5,
+              borderColor: "rgba(74, 237, 196, 0.15)",
+            },
+            inTuneGlowStyle,
+          ]}
+        />
+
+        {segments}
+        {innerSegments}
 
         <View
           style={{
             position: "absolute",
-            top: DIAL / 2 - DIAL * 0.11,
-            left: 0,
-            right: 0,
-            flexDirection: "row",
-            justifyContent: "space-between",
-            paddingHorizontal: DIAL * 0.12,
+            left: DIAL * 0.08,
+            top: DIAL / 2 - DIAL * 0.04,
           }}
         >
-          <Text style={[styles.dialLabelFlat, { fontSize: DIAL * 0.058 }]}>b</Text>
-          <Text style={[styles.dialLabelSharp, { fontSize: DIAL * 0.058 }]}>{"#"}</Text>
+          <Text style={{ color: ACCENT_MED, fontSize: DIAL * 0.045, fontWeight: "600" as const, fontStyle: "italic" as const }}>b</Text>
         </View>
-
-        {tickMarks}
+        <View
+          style={{
+            position: "absolute",
+            right: DIAL * 0.08,
+            top: DIAL / 2 - DIAL * 0.04,
+          }}
+        >
+          <Text style={{ color: ACCENT_MED, fontSize: DIAL * 0.045, fontWeight: "600" as const }}>#</Text>
+        </View>
 
         <Animated.View
           style={[
             {
               position: "absolute",
-              bottom: DIAL / 2 - 5,
-              width: 5,
-              height: DIAL / 2 - DIAL * 0.1,
-              alignItems: "center",
-              transformOrigin: "center bottom",
+              width: 6,
+              height: needleLength,
+              left: DIAL / 2 - 3,
+              top: DIAL / 2 - needleLength,
+              alignItems: "center" as const,
+              transformOrigin: `3px ${needleLength}px`,
             },
             needleStyle,
           ]}
         >
-          <Animated.View style={[{ width: 2, height: "100%" as any, borderRadius: 1 }, needleColorStyle]} />
-          <View style={styles.needleShadow} />
-        </Animated.View>
-
-        <View
-          style={{
-            position: "absolute",
-            bottom: DIAL / 2 - DIAL * 0.045,
-            width: DIAL * 0.09,
-            height: DIAL * 0.09,
-            borderRadius: DIAL * 0.045,
-            backgroundColor: Colors.dark.surfaceHighlight,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: "rgba(200, 192, 176, 0.15)",
-          }}
-        >
-          <View
-            style={{
-              width: DIAL * 0.05,
-              height: DIAL * 0.05,
-              borderRadius: DIAL * 0.025,
-              backgroundColor: Colors.dark.woodMedium,
-              borderWidth: 1,
-              borderColor: "rgba(200, 192, 176, 0.08)",
-            }}
+          <Animated.View
+            style={[
+              {
+                width: 2.5,
+                height: needleLength,
+                borderRadius: 1.25,
+              },
+              needleColorStyle,
+            ]}
           />
           <View
             style={{
               position: "absolute",
               width: 3,
-              height: 3,
+              height: needleLength,
               borderRadius: 1.5,
-              backgroundColor: Colors.dark.brass,
+              backgroundColor: "rgba(0,0,0,0.2)",
+              left: 3,
+              top: 2,
             }}
           />
-        </View>
+        </Animated.View>
+
+        <View
+          style={{
+            position: "absolute",
+            width: DIAL * 0.06,
+            height: DIAL * 0.06,
+            borderRadius: DIAL * 0.03,
+            backgroundColor: "#1A1A1A",
+            borderWidth: 2,
+            borderColor: ACCENT_MED,
+            ...(Platform.OS === "web"
+              ? { boxShadow: `0 0 12px ${ACCENT_DIM}` }
+              : {}),
+          }}
+        />
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  dialLabelFlat: {
-    color: Colors.dark.textTertiary,
-    fontWeight: "600" as const,
-    fontStyle: "italic" as const,
-  },
-  dialLabelSharp: {
-    color: Colors.dark.textTertiary,
-    fontWeight: "600" as const,
-  },
-  needleShadow: {
-    position: "absolute",
-    width: 2.5,
-    height: "100%" as any,
-    borderRadius: 1.25,
-    backgroundColor: "rgba(0,0,0,0.2)",
-    left: 2.5,
-    top: 2,
-  },
-});
