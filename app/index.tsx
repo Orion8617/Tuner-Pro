@@ -18,6 +18,8 @@ import Animated, {
   withSequence,
   withTiming,
   withSpring,
+  FadeIn,
+  FadeOut,
   Easing,
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
@@ -63,13 +65,14 @@ export default function TunerScreen() {
 
   const pulseAnim = useSharedValue(1);
   const micButtonScale = useSharedValue(1);
+  const stringBarOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (isListening) {
       pulseAnim.value = withRepeat(
         withSequence(
-          withTiming(1.15, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) })
+          withTiming(1.2, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) })
         ),
         -1,
         true
@@ -79,21 +82,39 @@ export default function TunerScreen() {
     }
   }, [isListening]);
 
+  useEffect(() => {
+    if (detectedString && isListening) {
+      stringBarOpacity.value = withTiming(1, { duration: 250 });
+    } else {
+      stringBarOpacity.value = withTiming(0, { duration: 200 });
+    }
+  }, [detectedString, isListening]);
+
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseAnim.value }],
-    opacity: isListening ? 0.3 : 0,
+    opacity: isListening ? 0.25 : 0,
   }));
 
   const micScale = useAnimatedStyle(() => ({
     transform: [{ scale: micButtonScale.value }],
   }));
 
+  const stringBarAnimStyle = useAnimatedStyle(() => ({
+    opacity: stringBarOpacity.value,
+  }));
+
   function triggerInTuneHaptic(currentCents: number) {
     const now = Date.now();
     const isInTune = Math.abs(currentCents) <= 5;
 
-    if (isInTune && !wasInTuneRef.current && now - lastHapticRef.current > 600) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (isInTune && !wasInTuneRef.current && now - lastHapticRef.current > 500) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setTimeout(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }, 80);
+      setTimeout(() => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }, 200);
       lastHapticRef.current = now;
     }
 
@@ -253,8 +274,8 @@ export default function TunerScreen() {
   function toggleListening() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     micButtonScale.value = withSequence(
-      withSpring(0.85, { damping: 10 }),
-      withSpring(1, { damping: 8 })
+      withSpring(0.88, { damping: 8, stiffness: 200 }),
+      withSpring(1, { damping: 6, stiffness: 120 })
     );
 
     if (isListening) {
@@ -275,6 +296,8 @@ export default function TunerScreen() {
 
   const targetFreq = detectedString?.frequency || null;
   const activeCents = cents;
+  const isDetecting = isListening && detectedFrequency > 0;
+  const tuningStatus = isDetecting ? getTuningStatus(activeCents) : null;
 
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === "web" ? 67 : insets.top }]}>
@@ -294,13 +317,13 @@ export default function TunerScreen() {
         >
           {user ? (
             <View style={styles.userBadge}>
-              <Ionicons name="person" size={16} color={Colors.dark.primary} />
+              <Ionicons name="person" size={14} color={Colors.dark.primary} />
               <Text style={styles.userBadgeText} numberOfLines={1}>
                 {user.username}
               </Text>
             </View>
           ) : (
-            <Ionicons name="person-circle-outline" size={26} color={Colors.dark.textSecondary} />
+            <Ionicons name="person-circle-outline" size={24} color={Colors.dark.textTertiary} />
           )}
         </Pressable>
 
@@ -313,17 +336,17 @@ export default function TunerScreen() {
         >
           {user?.isPremium ? (
             <View style={styles.proBadge}>
-              <Ionicons name="diamond" size={14} color={Colors.dark.premium} />
+              <Ionicons name="diamond" size={13} color={Colors.dark.premium} />
               <Text style={styles.proBadgeText}>PRO</Text>
             </View>
           ) : (
-            <Ionicons name="diamond-outline" size={22} color={Colors.dark.premium} />
+            <Ionicons name="diamond-outline" size={20} color={Colors.dark.textTertiary} />
           )}
         </Pressable>
       </View>
 
       <View style={styles.tunerArea}>
-        <TunerDial cents={activeCents} isActive={isListening && detectedFrequency > 0} />
+        <TunerDial cents={activeCents} isActive={isDetecting} />
       </View>
 
       <NoteDisplay
@@ -331,12 +354,13 @@ export default function TunerScreen() {
         octave={detectedOctave}
         cents={activeCents}
         frequency={detectedFrequency}
-        isActive={isListening && detectedFrequency > 0}
+        isActive={isDetecting}
         targetFrequency={targetFreq}
       />
 
       <View style={styles.micSection}>
-        <Animated.View style={[styles.micPulse, pulseStyle]} />
+        <Animated.View style={[styles.micPulseOuter, pulseStyle]} />
+        <Animated.View style={[styles.micPulseInner, pulseStyle]} />
         <Animated.View style={micScale}>
           <Pressable
             style={[
@@ -347,7 +371,7 @@ export default function TunerScreen() {
           >
             <Ionicons
               name={isListening ? "stop" : "mic"}
-              size={32}
+              size={28}
               color={isListening ? Colors.dark.warning : Colors.dark.text}
             />
           </Pressable>
@@ -361,18 +385,35 @@ export default function TunerScreen() {
         </Text>
       </View>
 
-      {isListening && detectedString && (
-        <View style={styles.detectedStringBar}>
-          <View style={styles.detectedStringIndicator}>
-            <Text style={styles.detectedStringLabel}>{t("tuner.string")}</Text>
-            <View style={styles.detectedStringBadge}>
-              <Text style={styles.detectedStringNumber}>{detectedString.stringNumber}</Text>
+      <Animated.View style={[styles.detectedStringBar, stringBarAnimStyle]}>
+        {detectedString && (
+          <>
+            <View style={styles.detectedStringIndicator}>
+              <Text style={styles.detectedStringLabel}>{t("tuner.string")}</Text>
+              <View style={[
+                styles.detectedStringBadge,
+                tuningStatus === "in_tune" && styles.detectedStringBadgeInTune,
+              ]}>
+                <Text style={[
+                  styles.detectedStringNumber,
+                  tuningStatus === "in_tune" && styles.detectedStringNumberInTune,
+                ]}>
+                  {detectedString.stringNumber}
+                </Text>
+              </View>
+              <Text style={[
+                styles.detectedStringNote,
+                tuningStatus === "in_tune" && { color: Colors.dark.accent },
+              ]}>
+                {detectedString.note}{detectedString.octave}
+              </Text>
             </View>
-            <Text style={styles.detectedStringNote}>{detectedString.note}{detectedString.octave}</Text>
-          </View>
-          <Text style={styles.detectedStringFreq}>{detectedString.frequency.toFixed(1)} Hz</Text>
-        </View>
-      )}
+            <View style={styles.detectedStringRight}>
+              <Text style={styles.detectedStringFreq}>{detectedString.frequency.toFixed(1)} Hz</Text>
+            </View>
+          </>
+        )}
+      </Animated.View>
 
       <View style={[styles.bottomArea, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 }]}>
         <TuningSelector
@@ -396,37 +437,39 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   topButton: {
-    padding: 8,
+    padding: 6,
   },
   userBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     backgroundColor: Colors.dark.primaryMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
   },
   userBadgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600" as const,
     color: Colors.dark.primary,
-    maxWidth: 100,
+    maxWidth: 80,
   },
   proBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "rgba(255, 215, 0, 0.12)",
+    backgroundColor: "rgba(255, 215, 0, 0.1)",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255, 215, 0, 0.15)",
   },
   proBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800" as const,
     color: Colors.dark.premium,
     letterSpacing: 0.5,
@@ -434,51 +477,71 @@ const styles = StyleSheet.create({
   tunerArea: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 20,
-    paddingBottom: 10,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   micSection: {
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 20,
+    gap: 10,
+    paddingVertical: 18,
   },
-  micPulse: {
+  micPulseOuter: {
     position: "absolute",
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: Colors.dark.primary,
-    top: 10,
+    top: 11,
+  },
+  micPulseInner: {
+    position: "absolute",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.dark.primary,
+    top: 19,
+    opacity: 0.3,
   },
   micButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.dark.surface,
-    borderWidth: 2,
-    borderColor: Colors.dark.border,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.dark.surfaceElevated,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }
+      : {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+          elevation: 8,
+        }),
   },
   micButtonActive: {
-    backgroundColor: Colors.dark.warningMuted,
-    borderColor: Colors.dark.warning,
+    backgroundColor: "rgba(255, 82, 82, 0.15)",
+    borderColor: "rgba(255, 82, 82, 0.3)",
   },
   micLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.dark.textTertiary,
+    fontWeight: "500" as const,
+    letterSpacing: 0.3,
   },
   detectedStringBar: {
     flexDirection: "row" as const,
     alignItems: "center",
     justifyContent: "space-between",
-    marginHorizontal: 20,
+    marginHorizontal: 24,
     backgroundColor: Colors.dark.surface,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.dark.border,
+    borderColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   detectedStringIndicator: {
     flexDirection: "row" as const,
@@ -486,32 +549,45 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   detectedStringLabel: {
-    fontSize: 13,
+    fontSize: 11,
     color: Colors.dark.textTertiary,
     fontWeight: "500" as const,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.8,
   },
   detectedStringBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: Colors.dark.primary,
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
+  detectedStringBadgeInTune: {
+    backgroundColor: Colors.dark.accent,
+  },
   detectedStringNumber: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800" as const,
     color: Colors.dark.background,
   },
+  detectedStringNumberInTune: {
+    color: "#000",
+  },
   detectedStringNote: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700" as const,
     color: Colors.dark.text,
+    letterSpacing: 0.5,
+  },
+  detectedStringRight: {
+    alignItems: "flex-end" as const,
   },
   detectedStringFreq: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.dark.textTertiary,
     fontWeight: "500" as const,
+    letterSpacing: 0.3,
   },
   bottomArea: {
     flex: 1,
