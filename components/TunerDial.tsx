@@ -15,7 +15,6 @@ const ACCENT_DIM = "rgba(74, 237, 196, 0.15)";
 const ACCENT_GLOW = "rgba(74, 237, 196, 0.06)";
 const RED = "#FF4444";
 const RED_DIM = "rgba(255, 68, 68, 0.25)";
-const ORANGE = "#FF9544";
 const TEXT_DIM = "rgba(255, 255, 255, 0.2)";
 const TEXT_MED = "rgba(255, 255, 255, 0.5)";
 const SEG_OFF = "rgba(74, 237, 196, 0.08)";
@@ -205,133 +204,141 @@ export default function TunerDial({
     ? `${frequency.toFixed(1)}`
     : "---.-";
 
-  const dialHeight = DIAL * 0.62;
+  const arcThickness = segH * 1.5 + innerSegH * 1.5 + 14;
+  const contentStart = arcThickness + 6;
 
   return (
-    <View style={{ width: DIAL, height: dialHeight, alignItems: "center", overflow: "hidden" }}>
-      <View
-        style={{
-          width: DIAL,
-          height: DIAL,
-          borderRadius: DIAL / 2,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Animated.View
-          style={[
-            {
-              position: "absolute",
-              width: DIAL + 20,
-              height: DIAL + 20,
-              borderRadius: (DIAL + 20) / 2,
-              backgroundColor: ACCENT_GLOW,
-              borderWidth: 1,
-              borderColor: "rgba(74, 237, 196, 0.1)",
-            },
-            inTuneGlowStyle,
-          ]}
-        />
+    <View style={{ width: DIAL, alignItems: "center" }}>
+      {/* ARC container - clips to semicircle */}
+      <View style={{ width: DIAL, height: DIAL / 2 + 10, overflow: "hidden" }}>
+        <View
+          style={{
+            width: DIAL,
+            height: DIAL,
+            borderRadius: DIAL / 2,
+          }}
+        >
+          <Animated.View
+            style={[
+              {
+                position: "absolute",
+                left: -10,
+                top: -10,
+                width: DIAL + 20,
+                height: DIAL + 20,
+                borderRadius: (DIAL + 20) / 2,
+                backgroundColor: ACCENT_GLOW,
+                borderWidth: 1,
+                borderColor: "rgba(74, 237, 196, 0.1)",
+              },
+              inTuneGlowStyle,
+            ]}
+          />
 
-        {outerSegments}
-        {innerSegments}
+          {outerSegments}
+          {innerSegments}
 
-        <View style={{ position: "absolute", left: DIAL * 0.05, top: DIAL / 2 - DIAL * 0.03 }}>
-          <Text style={{ color: "rgba(74, 237, 196, 0.3)", fontSize: DIAL * 0.045, fontWeight: "600" as const, fontStyle: "italic" as const }}>b</Text>
-        </View>
-        <View style={{ position: "absolute", right: DIAL * 0.05, top: DIAL / 2 - DIAL * 0.03 }}>
-          <Text style={{ color: "rgba(74, 237, 196, 0.3)", fontSize: DIAL * 0.045, fontWeight: "600" as const }}>#</Text>
-        </View>
-
-        {/* FREQUENCY LCD */}
-        <View style={{ position: "absolute", top: DIAL * 0.26, alignItems: "center" }}>
-          <View style={{
-            flexDirection: "row",
-            alignItems: "baseline",
-            backgroundColor: "rgba(10, 10, 10, 0.9)",
-            paddingHorizontal: 14,
-            paddingVertical: 5,
-            borderRadius: 4,
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.05)",
-          }}>
-            <Text style={{
-              fontSize: DIAL * 0.05,
-              fontWeight: "700" as const,
-              color: TEXT_DIM,
-              fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
-              fontVariant: ["tabular-nums"] as any,
-            }}>0</Text>
-            <Text style={{
-              fontSize: DIAL * 0.05,
-              fontWeight: "700" as const,
-              color: ACCENT,
-              fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
-              fontVariant: ["tabular-nums"] as any,
-            }}>{freqStr}</Text>
-            <Text style={{
-              fontSize: DIAL * 0.03,
-              fontWeight: "600" as const,
-              color: TEXT_MED,
-              marginLeft: 3,
-            }}>Hz</Text>
+          {/* b flat symbol */}
+          <View style={{ position: "absolute", left: DIAL * 0.04, top: DIAL / 2 - DIAL * 0.02 }}>
+            <Text style={{ color: "rgba(74, 237, 196, 0.3)", fontSize: DIAL * 0.04, fontWeight: "600" as const, fontStyle: "italic" as const }}>b</Text>
           </View>
+          {/* # sharp symbol */}
+          <View style={{ position: "absolute", right: DIAL * 0.04, top: DIAL / 2 - DIAL * 0.02 }}>
+            <Text style={{ color: "rgba(74, 237, 196, 0.3)", fontSize: DIAL * 0.04, fontWeight: "600" as const }}>#</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* CONTENT below the arc — uses flexbox for clean stacking */}
+      <View style={{ width: DIAL, alignItems: "center", marginTop: -DIAL * 0.22 }}>
+        {/* FREQUENCY LCD */}
+        <View style={{
+          flexDirection: "row",
+          alignItems: "baseline",
+          backgroundColor: "rgba(10, 10, 10, 0.9)",
+          paddingHorizontal: 14,
+          paddingVertical: 4,
+          borderRadius: 4,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.05)",
+        }}>
+          <Text style={{
+            fontSize: DIAL * 0.045,
+            fontWeight: "700" as const,
+            color: TEXT_DIM,
+            fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
+            fontVariant: ["tabular-nums"] as any,
+          }}>0</Text>
+          <Text style={{
+            fontSize: DIAL * 0.045,
+            fontWeight: "700" as const,
+            color: ACCENT,
+            fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
+            fontVariant: ["tabular-nums"] as any,
+          }}>{freqStr}</Text>
+          <Text style={{
+            fontSize: DIAL * 0.028,
+            fontWeight: "600" as const,
+            color: TEXT_MED,
+            marginLeft: 3,
+          }}>Hz</Text>
         </View>
 
         {/* BIG NOTE */}
-        <View style={{ position: "absolute", top: DIAL * 0.34, alignItems: "center" }}>
-          <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-            <Text style={{
-              fontSize: DIAL * 0.24,
-              fontWeight: "200" as const,
-              color: isActive ? statusColor : TEXT_DIM,
-              letterSpacing: 2,
-              lineHeight: DIAL * 0.26,
-            }}>
-              {note || "--"}
-            </Text>
-            {octave !== null && octave !== undefined && isActive && (
-              <Text style={{
-                fontSize: DIAL * 0.09,
-                fontWeight: "400" as const,
-                color: statusColor,
-                marginTop: DIAL * 0.02,
-                opacity: 0.7,
-              }}>{octave}</Text>
-            )}
-          </View>
-        </View>
-
-        {/* CENTS */}
-        <View style={{ position: "absolute", left: DIAL * 0.08, top: DIAL * 0.54 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", marginTop: 6 }}>
           <Text style={{
-            fontSize: DIAL * 0.05,
-            fontWeight: "700" as const,
+            fontSize: DIAL * 0.2,
+            fontWeight: "200" as const,
             color: isActive ? statusColor : TEXT_DIM,
-            fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
-            fontVariant: ["tabular-nums"] as any,
-            letterSpacing: 1,
+            letterSpacing: 2,
+            lineHeight: DIAL * 0.22,
           }}>
-            {cents < 0 ? "-" : isActive && cents > 0 ? "+" : ""}{centsDisplay}
+            {note || "--"}
           </Text>
-          <Text style={{
-            fontSize: DIAL * 0.028,
-            color: TEXT_MED,
-            fontWeight: "500" as const,
-            marginTop: 1,
-          }}>Cent</Text>
+          {octave !== null && octave !== undefined && isActive && (
+            <Text style={{
+              fontSize: DIAL * 0.08,
+              fontWeight: "400" as const,
+              color: statusColor,
+              marginTop: DIAL * 0.01,
+              opacity: 0.7,
+            }}>{octave}</Text>
+          )}
         </View>
 
-        {/* CENTER DOTS */}
-        <View style={{ position: "absolute", top: DIAL * 0.57, flexDirection: "row", gap: 4 }}>
-          <View style={{
-            width: 16, height: 3, borderRadius: 1.5,
-            backgroundColor: isActive && isInTune ? ACCENT : "rgba(255,255,255,0.08)",
-          }} />
-          <View style={{
-            width: 16, height: 3, borderRadius: 1.5,
-            backgroundColor: isActive && isInTune ? ACCENT : "rgba(255,255,255,0.08)",
-          }} />
+        {/* CENTS + STATUS ROW */}
+        <View style={{ width: DIAL * 0.85, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+          <View>
+            <Text style={{
+              fontSize: DIAL * 0.042,
+              fontWeight: "700" as const,
+              color: isActive ? statusColor : TEXT_DIM,
+              fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
+              fontVariant: ["tabular-nums"] as any,
+              letterSpacing: 1,
+            }}>
+              {cents < 0 ? "-" : isActive && cents > 0 ? "+" : ""}{centsDisplay}
+            </Text>
+            <Text style={{
+              fontSize: DIAL * 0.025,
+              color: TEXT_MED,
+              fontWeight: "500" as const,
+              marginTop: 1,
+            }}>Cent</Text>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 4 }}>
+            <View style={{
+              width: 18, height: 3, borderRadius: 1.5,
+              backgroundColor: isActive && isInTune ? ACCENT : "rgba(255,255,255,0.08)",
+            }} />
+            <View style={{
+              width: 18, height: 3, borderRadius: 1.5,
+              backgroundColor: isActive && isInTune ? ACCENT : "rgba(255,255,255,0.08)",
+            }} />
+          </View>
+
+          <Text style={{ color: "rgba(74, 237, 196, 0.3)", fontSize: DIAL * 0.04, fontWeight: "600" as const }}>#</Text>
         </View>
       </View>
     </View>
