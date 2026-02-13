@@ -196,7 +196,7 @@ export function frequencyToNote(frequency: number): { note: string; octave: numb
 }
 
 export function findClosestString(frequency: number, tuning: GuitarString[] = STANDARD_TUNING): GuitarString | null {
-  if (frequency < 50 || frequency > 500) return null;
+  if (frequency < 50 || frequency > 600) return null;
 
   let closest: GuitarString | null = null;
   let minCents = Infinity;
@@ -231,11 +231,11 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
   }
   rms = Math.sqrt(rms / size);
 
-  if (rms < 0.06) return -1;
+  if (rms < 0.03) return -1;
 
   let r1 = 0;
   let r2 = size - 1;
-  const threshold = 0.15;
+  const threshold = 0.12;
 
   for (let i = 0; i < size / 2; i++) {
     if (Math.abs(buffer[i]) < threshold) {
@@ -281,7 +281,6 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
   if (maxpos < 1 || maxpos >= size - 1) return -1;
 
   const confidence = maxval / c[0];
-  if (confidence < 0.7) return -1;
 
   let T0 = maxpos;
 
@@ -297,7 +296,13 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
 
   const frequency = sampleRate / T0;
 
-  if (frequency < 50 || frequency > 500) return -1;
+  if (frequency < 50 || frequency > 600) return -1;
+
+  const minConfidence = frequency > 250 ? 0.55 : 0.65;
+  if (confidence < minConfidence) return -1;
+
+  const minRms = frequency > 250 ? 0.035 : 0.05;
+  if (rms < minRms) return -1;
 
   return frequency;
 }
@@ -311,9 +316,9 @@ export class FrequencyStabilizer {
   private readonly silenceThreshold: number;
 
   constructor(
-    maxHistory = 8,
-    stabilityThresholdCents = 50,
-    minReadings = 4,
+    maxHistory = 6,
+    stabilityThresholdCents = 60,
+    minReadings = 3,
     silenceThreshold = 10
   ) {
     this.maxHistory = maxHistory;
