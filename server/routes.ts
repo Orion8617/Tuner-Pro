@@ -39,12 +39,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const monthlyUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_MONTHLY;
     const annualUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_ANNUAL;
+    const lifetimeUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_LIFETIME;
 
     if (!monthlyUrl || !annualUrl) {
       return res.status(500).json({ error: "Payment not configured" });
     }
 
-    const baseUrl = plan === "annual" ? annualUrl : monthlyUrl;
+    let baseUrl: string;
+    if (plan === "lifetime") {
+      if (!lifetimeUrl) {
+        return res.status(500).json({ error: "Lifetime payment not configured" });
+      }
+      baseUrl = lifetimeUrl;
+    } else {
+      baseUrl = plan === "annual" ? annualUrl : monthlyUrl;
+    }
 
     const checkoutUrl = `${baseUrl}?checkout[custom][user_id]=${encodeURIComponent(userId)}`;
 
@@ -99,7 +108,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case "subscription_updated": {
         const variantId = String(attrs?.variant_id || "");
         const annualVariantId = process.env.LEMONSQUEEZY_VARIANT_ANNUAL || "";
-        const plan = variantId === annualVariantId ? "annual" : "monthly";
+        const lifetimeVariantId = process.env.LEMONSQUEEZY_VARIANT_LIFETIME || "";
+        const plan = variantId === lifetimeVariantId ? "lifetime" : variantId === annualVariantId ? "annual" : "monthly";
 
         const statusMap: Record<string, "active" | "cancelled" | "expired" | "paused"> = {
           active: "active",
@@ -153,7 +163,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       case "order_created": {
-        console.log(`Order created for user ${userId}`);
+        const orderVariantId = String(attrs?.first_order_item?.variant_id || "");
+        const lifetimeVarId = process.env.LEMONSQUEEZY_VARIANT_LIFETIME || "";
+
+        if (orderVariantId === lifetimeVarId && lifetimeVarId !== "") {
+          await storage.upsertSubscription({
+            userId,
+            lemonSqueezyId,
+            orderId: String(event.data?.id || ""),
+            plan: "lifetime",
+            status: "active",
+            currentPeriodEnd: new Date("2099-12-31").toISOString(),
+          });
+          console.log(`Lifetime purchase activated for user ${userId}`);
+        } else {
+          console.log(`Order created for user ${userId}`);
+        }
         break;
       }
 

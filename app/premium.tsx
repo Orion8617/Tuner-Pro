@@ -55,7 +55,7 @@ function getFeatures() {
 export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
   const { user, upgradeToPremium, checkSubscriptionStatus } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual">("annual");
+  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual" | "lifetime">("annual");
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handlePurchase = useCallback(async () => {
@@ -200,6 +200,27 @@ export default function PremiumScreen() {
               <Text style={styles.saveText}>{t("premium.save")}</Text>
             </View>
           </Pressable>
+
+          <Pressable
+            style={[styles.planCard, selectedPlan === "lifetime" && styles.planCardActive]}
+            onPress={() => { setSelectedPlan("lifetime"); Haptics.selectionAsync(); }}
+          >
+            <View style={styles.lifetimeBadge}>
+              <Text style={styles.lifetimeBadgeText}>{t("premium.oneTime")}</Text>
+            </View>
+            <Text style={[styles.planLabel, selectedPlan === "lifetime" && styles.planLabelActive]}>
+              {t("premium.lifetime")}
+            </Text>
+            <Text style={[styles.planPrice, selectedPlan === "lifetime" && styles.planPriceActive]}>
+              $14.99
+            </Text>
+            <Text style={[styles.planPeriod, selectedPlan === "lifetime" && styles.planPeriodActive]}>
+              {t("premium.forever")}
+            </Text>
+            <View style={styles.lifetimeSaveBadge}>
+              <Text style={styles.lifetimeSaveText}>{t("premium.payOnce")}</Text>
+            </View>
+          </Pressable>
         </View>
 
         <View style={styles.compareSection}>
@@ -310,7 +331,7 @@ export default function PremiumScreen() {
                 <>
                   <Ionicons name="diamond" size={20} color="#000" />
                   <Text style={styles.purchaseText}>
-                    {t("premium.subscribe")} — {selectedPlan === "monthly" ? "$1.99/mo" : "$9.99/yr"}
+                    {selectedPlan === "lifetime" ? t("premium.buyLifetime") : t("premium.subscribe")} — {selectedPlan === "monthly" ? "$1.99/mo" : selectedPlan === "annual" ? "$9.99/yr" : "$14.99"}
                   </Text>
                 </>
               )}
@@ -319,7 +340,7 @@ export default function PremiumScreen() {
         )}
 
         <Text style={styles.disclaimer}>
-          {t("premium.disclaimer")}
+          {selectedPlan === "lifetime" ? t("premium.disclaimerLifetime") : t("premium.disclaimer")}
         </Text>
       </ScrollView>
     </View>
@@ -368,12 +389,14 @@ const styles = StyleSheet.create({
   },
   planSelector: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
     marginTop: 24,
+    flexWrap: "wrap",
   },
   planCard: {
     flex: 1,
-    padding: 16,
+    minWidth: 95,
+    padding: 12,
     borderRadius: 16,
     backgroundColor: Colors.dark.surface,
     borderWidth: 2,
@@ -396,7 +419,7 @@ const styles = StyleSheet.create({
     color: Colors.dark.primary,
   },
   planPrice: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: "800" as const,
     color: Colors.dark.textSecondary,
     marginTop: 4,
@@ -594,5 +617,32 @@ const styles = StyleSheet.create({
     color: Colors.dark.inTune,
     fontWeight: "600" as const,
     flex: 1,
+  },
+  lifetimeBadge: {
+    position: "absolute",
+    top: -10,
+    backgroundColor: Colors.dark.premium,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  lifetimeBadgeText: {
+    fontSize: 10,
+    fontWeight: "700" as const,
+    color: "#000",
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.3,
+  },
+  lifetimeSaveBadge: {
+    backgroundColor: "rgba(255, 215, 0, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  lifetimeSaveText: {
+    fontSize: 10,
+    fontWeight: "700" as const,
+    color: Colors.dark.premium,
   },
 });
