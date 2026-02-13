@@ -219,7 +219,7 @@ export default function PremiumScreen() {
                 <Text style={styles.compareTextBad}>{t("premium.compareAds")}</Text>
               </View>
               <View style={styles.compareColRight}>
-                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.accent} />
+                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.inTune} />
                 <Text style={styles.compareTextGood}>{t("premium.compareNoAds")}</Text>
               </View>
             </View>
@@ -229,7 +229,7 @@ export default function PremiumScreen() {
                 <Text style={styles.compareTextBad}>{t("premium.comparePrice")}</Text>
               </View>
               <View style={styles.compareColRight}>
-                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.accent} />
+                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.inTune} />
                 <Text style={styles.compareTextGood}>{t("premium.compareOurPrice")}</Text>
               </View>
             </View>
@@ -239,7 +239,7 @@ export default function PremiumScreen() {
                 <Text style={styles.compareTextBad}>{t("premium.compareBloat")}</Text>
               </View>
               <View style={styles.compareColRight}>
-                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.accent} />
+                <Ionicons name="checkmark-circle" size={16} color={Colors.dark.inTune} />
                 <Text style={styles.compareTextGood}>{t("premium.compareFast")}</Text>
               </View>
             </View>
@@ -275,7 +275,7 @@ export default function PremiumScreen() {
               <Ionicons
                 name={feature.free ? "checkmark-circle" : "lock-closed"}
                 size={20}
-                color={feature.free ? Colors.dark.accent : Colors.dark.textTertiary}
+                color={feature.free ? Colors.dark.inTune : Colors.dark.textTertiary}
               />
             </View>
           ))}
@@ -283,7 +283,7 @@ export default function PremiumScreen() {
 
         {user?.isPremium ? (
           <View style={styles.activeBadge}>
-            <Ionicons name="checkmark-circle" size={24} color={Colors.dark.accent} />
+            <Ionicons name="checkmark-circle" size={24} color={Colors.dark.inTune} />
             <Text style={styles.activeText}>{t("premium.activePlan")}</Text>
           </View>
         ) : (
@@ -359,6 +359,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "800" as const,
     color: Colors.dark.text,
+    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
   },
   subtitle: {
     fontSize: 15,
@@ -413,7 +414,7 @@ const styles = StyleSheet.create({
   bestValueBadge: {
     position: "absolute",
     top: -10,
-    backgroundColor: Colors.dark.accent,
+    backgroundColor: Colors.dark.inTune,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   saveBadge: {
-    backgroundColor: Colors.dark.accentMuted,
+    backgroundColor: Colors.dark.inTuneMuted,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -435,7 +436,7 @@ const styles = StyleSheet.create({
   saveText: {
     fontSize: 10,
     fontWeight: "700" as const,
-    color: Colors.dark.accent,
+    color: Colors.dark.inTune,
   },
   featuresContainer: {
     marginTop: 28,
@@ -494,13 +495,13 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 18,
     borderRadius: 16,
-    backgroundColor: Colors.dark.accentMuted,
+    backgroundColor: Colors.dark.inTuneMuted,
     marginTop: 24,
   },
   activeText: {
     fontSize: 17,
     fontWeight: "700" as const,
-    color: Colors.dark.accent,
+    color: Colors.dark.inTune,
   },
   purchaseButton: {
     marginTop: 24,
@@ -562,7 +563,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     padding: 12,
-    backgroundColor: "rgba(0, 230, 118, 0.06)",
+    backgroundColor: Colors.dark.inTuneMuted,
   },
   compareHeaderText: {
     fontSize: 12,
@@ -574,7 +575,7 @@ const styles = StyleSheet.create({
   compareHeaderTextHighlight: {
     fontSize: 12,
     fontWeight: "700" as const,
-    color: Colors.dark.accent,
+    color: Colors.dark.inTune,
     textTransform: "uppercase" as const,
     letterSpacing: 0.5,
   },
@@ -590,7 +591,7 @@ const styles = StyleSheet.create({
   },
   compareTextGood: {
     fontSize: 13,
-    color: Colors.dark.accent,
+    color: Colors.dark.inTune,
     fontWeight: "600" as const,
     flex: 1,
   },

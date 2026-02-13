@@ -4,8 +4,6 @@ import Animated, {
   withSpring,
   useSharedValue,
   withTiming,
-  interpolateColor,
-  Easing,
 } from "react-native-reanimated";
 import { useEffect } from "react";
 import Colors from "@/constants/colors";
@@ -31,12 +29,11 @@ export default function NoteDisplay({
 }: NoteDisplayProps) {
   const status = isActive ? getTuningStatus(cents) : null;
   const pulseScale = useSharedValue(1);
-  const statusOpacity = useSharedValue(0);
   const noteOpacity = useSharedValue(0.3);
 
   useEffect(() => {
     if (status === "in_tune") {
-      pulseScale.value = withSpring(1.08, { damping: 6, stiffness: 80 });
+      pulseScale.value = withSpring(1.06, { damping: 6, stiffness: 80 });
       setTimeout(() => {
         pulseScale.value = withSpring(1, { damping: 10 });
       }, 250);
@@ -46,10 +43,8 @@ export default function NoteDisplay({
   useEffect(() => {
     if (isActive && note) {
       noteOpacity.value = withTiming(1, { duration: 200 });
-      statusOpacity.value = withTiming(1, { duration: 300 });
     } else {
       noteOpacity.value = withTiming(0.3, { duration: 400 });
-      statusOpacity.value = withTiming(0.5, { duration: 300 });
     }
   }, [isActive, note]);
 
@@ -58,19 +53,15 @@ export default function NoteDisplay({
     opacity: noteOpacity.value,
   }));
 
-  const statusBarStyle = useAnimatedStyle(() => ({
-    opacity: statusOpacity.value,
-  }));
-
   const statusColor =
     status === "in_tune"
-      ? Colors.dark.accent
+      ? Colors.dark.inTune
       : status === "flat" || status === "sharp"
       ? Math.abs(cents) > 25
-        ? Colors.dark.warning
+        ? Colors.dark.needleRed
         : Math.abs(cents) > 10
-        ? Colors.dark.primary
-        : "#90CAF9"
+        ? Colors.dark.ochre
+        : Colors.dark.amber
       : Colors.dark.textTertiary;
 
   const statusText =
@@ -102,7 +93,7 @@ export default function NoteDisplay({
         )}
       </Animated.View>
 
-      <Animated.View style={[styles.centsBarContainer, statusBarStyle]}>
+      <View style={styles.centsBarContainer}>
         <View style={styles.centsBarTrack}>
           <View style={styles.centsBarCenter} />
           {isActive && Math.abs(cents) > 0 && (
@@ -118,15 +109,15 @@ export default function NoteDisplay({
             />
           )}
         </View>
-      </Animated.View>
+      </View>
 
-      <Animated.View style={[styles.infoRow, statusBarStyle]}>
+      <View style={styles.infoRow}>
         <View style={styles.infoPill}>
           <Text style={styles.infoLabel}>CENTS</Text>
           <Text style={[styles.infoValue, { color: statusColor }]}>{centsLabel}</Text>
         </View>
 
-        <View style={[styles.statusPill, { backgroundColor: statusColor + "18", borderColor: statusColor + "30" }]}>
+        <View style={[styles.statusPill, { backgroundColor: statusColor + "15", borderColor: statusColor + "25" }]}>
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
           <Text style={[styles.statusText, { color: statusColor }]}>
             {isActive ? statusText : t("noteDisplay.listening")}
@@ -139,14 +130,15 @@ export default function NoteDisplay({
             {isActive ? frequency.toFixed(1) : "--"}
           </Text>
         </View>
-      </Animated.View>
+      </View>
 
       {targetFrequency && isActive && (
         <View style={styles.targetRow}>
-          <View style={styles.targetDot} />
+          <View style={styles.targetDivider} />
           <Text style={styles.targetFreq}>
             {t("noteDisplay.target")} {targetFrequency.toFixed(2)} Hz
           </Text>
+          <View style={styles.targetDivider} />
         </View>
       )}
     </View>
@@ -156,7 +148,7 @@ export default function NoteDisplay({
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    gap: 14,
+    gap: 12,
     paddingHorizontal: 20,
   },
   noteContainer: {
@@ -165,41 +157,44 @@ const styles = StyleSheet.create({
   },
   note: {
     fontSize: 72,
-    fontWeight: "800" as const,
-    letterSpacing: 3,
+    fontWeight: "300" as const,
+    letterSpacing: 4,
+    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
   },
   octave: {
-    fontSize: 26,
-    fontWeight: "600" as const,
-    marginTop: 10,
-    opacity: 0.7,
+    fontSize: 24,
+    fontWeight: "400" as const,
+    marginTop: 12,
+    opacity: 0.6,
+    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
   },
   centsBarContainer: {
     width: "100%",
-    paddingHorizontal: 30,
+    paddingHorizontal: 40,
   },
   centsBarTrack: {
-    height: 4,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 2,
+    height: 3,
+    backgroundColor: Colors.dark.borderLight,
+    borderRadius: 1.5,
     overflow: "hidden",
     position: "relative",
   },
   centsBarCenter: {
     position: "absolute",
     left: "50%",
-    top: 0,
+    top: -1,
     width: 2,
-    height: 4,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    height: 5,
+    backgroundColor: Colors.dark.ochre,
     marginLeft: -1,
+    borderRadius: 1,
   },
   centsBarFill: {
     position: "absolute",
     top: 0,
-    height: 4,
-    borderRadius: 2,
-    opacity: 0.8,
+    height: 3,
+    borderRadius: 1.5,
+    opacity: 0.7,
   },
   infoRow: {
     flexDirection: "row",
@@ -218,43 +213,44 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   infoValue: {
-    fontSize: 18,
-    fontWeight: "700" as const,
+    fontSize: 17,
+    fontWeight: "600" as const,
+    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
   },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
     borderWidth: 1,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   statusText: {
-    fontSize: 13,
-    fontWeight: "700" as const,
-    letterSpacing: 0.3,
+    fontSize: 12,
+    fontWeight: "600" as const,
+    letterSpacing: 0.5,
   },
   targetRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 10,
     marginTop: 2,
   },
-  targetDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.dark.textTertiary,
+  targetDivider: {
+    height: 1,
+    width: 20,
+    backgroundColor: Colors.dark.border,
   },
   targetFreq: {
     fontSize: 11,
     color: Colors.dark.textTertiary,
     fontWeight: "500" as const,
+    letterSpacing: 0.5,
   },
 });

@@ -9,7 +9,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useSharedValue,
@@ -69,7 +69,7 @@ export default function TunerScreen() {
     if (isListening) {
       pulseAnim.value = withRepeat(
         withSequence(
-          withTiming(1.2, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1.15, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
           withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) })
         ),
         -1,
@@ -90,7 +90,7 @@ export default function TunerScreen() {
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseAnim.value }],
-    opacity: isListening ? 0.25 : 0,
+    opacity: isListening ? 0.2 : 0,
   }));
 
   const micScale = useAnimatedStyle(() => ({
@@ -315,15 +315,20 @@ export default function TunerScreen() {
         >
           {user ? (
             <View style={styles.userBadge}>
-              <Ionicons name="person" size={14} color={Colors.dark.primary} />
+              <Ionicons name="person" size={13} color={Colors.dark.amber} />
               <Text style={styles.userBadgeText} numberOfLines={1}>
                 {user.username}
               </Text>
             </View>
           ) : (
-            <Ionicons name="person-circle-outline" size={24} color={Colors.dark.textTertiary} />
+            <Ionicons name="person-circle-outline" size={22} color={Colors.dark.textTertiary} />
           )}
         </Pressable>
+
+        <View style={styles.brandMark}>
+          <MaterialCommunityIcons name="guitar-acoustic" size={16} color={Colors.dark.ochre} />
+          <Text style={styles.brandText}>GuitarTune</Text>
+        </View>
 
         <Pressable
           style={styles.topButton}
@@ -334,14 +339,16 @@ export default function TunerScreen() {
         >
           {user?.isPremium ? (
             <View style={styles.proBadge}>
-              <Ionicons name="diamond" size={13} color={Colors.dark.premium} />
+              <Ionicons name="diamond" size={12} color={Colors.dark.premium} />
               <Text style={styles.proBadgeText}>PRO</Text>
             </View>
           ) : (
-            <Ionicons name="diamond-outline" size={20} color={Colors.dark.textTertiary} />
+            <Ionicons name="diamond-outline" size={18} color={Colors.dark.textTertiary} />
           )}
         </Pressable>
       </View>
+
+      <View style={styles.topDivider} />
 
       <View style={styles.tunerArea}>
         <TunerDial cents={activeCents} isActive={isDetecting} />
@@ -357,8 +364,7 @@ export default function TunerScreen() {
       />
 
       <View style={styles.micSection}>
-        <Animated.View style={[styles.micPulseOuter, pulseStyle]} />
-        <Animated.View style={[styles.micPulseInner, pulseStyle]} />
+        <Animated.View style={[styles.micPulse, pulseStyle]} />
         <Animated.View style={micScale}>
           <Pressable
             style={[
@@ -369,8 +375,8 @@ export default function TunerScreen() {
           >
             <Ionicons
               name={isListening ? "stop" : "mic"}
-              size={28}
-              color={isListening ? Colors.dark.warning : Colors.dark.text}
+              size={26}
+              color={isListening ? Colors.dark.needleRed : Colors.dark.cream}
             />
           </Pressable>
         </Animated.View>
@@ -394,14 +400,14 @@ export default function TunerScreen() {
               ]}>
                 <Text style={[
                   styles.detectedStringNumber,
-                  tuningStatus === "in_tune" && styles.detectedStringNumberInTune,
+                  tuningStatus === "in_tune" && { color: "#1A120B" },
                 ]}>
                   {detectedString.stringNumber}
                 </Text>
               </View>
               <Text style={[
                 styles.detectedStringNote,
-                tuningStatus === "in_tune" && { color: Colors.dark.accent },
+                tuningStatus === "in_tune" && { color: Colors.dark.inTune },
               ]}>
                 {detectedString.note}{detectedString.octave}
               </Text>
@@ -434,11 +440,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 6,
   },
   topButton: {
     padding: 6,
+    minWidth: 40,
+  },
+  brandMark: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  brandText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: Colors.dark.ochre,
+    letterSpacing: 1,
+    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
   },
   userBadge: {
     flexDirection: "row",
@@ -447,24 +466,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.primaryMuted,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 16,
+    borderRadius: 14,
   },
   userBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600" as const,
-    color: Colors.dark.primary,
-    maxWidth: 80,
+    color: Colors.dark.amber,
+    maxWidth: 70,
   },
   proBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "rgba(255, 215, 0, 0.1)",
+    backgroundColor: "rgba(232, 197, 71, 0.1)",
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255, 215, 0, 0.15)",
+    borderColor: "rgba(232, 197, 71, 0.15)",
   },
   proBadgeText: {
     fontSize: 10,
@@ -472,62 +491,58 @@ const styles = StyleSheet.create({
     color: Colors.dark.premium,
     letterSpacing: 0.5,
   },
+  topDivider: {
+    height: 1,
+    backgroundColor: Colors.dark.border,
+    marginHorizontal: 20,
+  },
   tunerArea: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 18,
+    paddingBottom: 10,
   },
   micSection: {
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 18,
+    gap: 8,
+    paddingVertical: 16,
   },
-  micPulseOuter: {
-    position: "absolute",
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: Colors.dark.primary,
-    top: 11,
-  },
-  micPulseInner: {
+  micPulse: {
     position: "absolute",
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.dark.primary,
-    top: 19,
-    opacity: 0.3,
+    backgroundColor: Colors.dark.ochre,
+    top: 10,
   },
   micButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: Colors.dark.surfaceElevated,
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderWidth: 2,
+    borderColor: Colors.dark.woodLight,
     alignItems: "center",
     justifyContent: "center",
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }
+      ? { boxShadow: "inset 0 1px 3px rgba(0,0,0,0.3), 0 3px 12px rgba(0,0,0,0.4)" }
       : {
           shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.4,
+          shadowRadius: 8,
           elevation: 8,
         }),
   },
   micButtonActive: {
-    backgroundColor: "rgba(255, 82, 82, 0.15)",
-    borderColor: "rgba(255, 82, 82, 0.3)",
+    backgroundColor: Colors.dark.warningMuted,
+    borderColor: Colors.dark.needleRed,
   },
   micLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.dark.textTertiary,
     fontWeight: "500" as const,
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
   detectedStringBar: {
     flexDirection: "row" as const,
@@ -535,9 +550,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginHorizontal: 24,
     backgroundColor: Colors.dark.surface,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    borderColor: Colors.dark.border,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -547,42 +562,40 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   detectedStringLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.dark.textTertiary,
-    fontWeight: "500" as const,
+    fontWeight: "600" as const,
     textTransform: "uppercase" as const,
-    letterSpacing: 0.8,
+    letterSpacing: 1,
   },
   detectedStringBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.dark.primary,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.dark.ochre,
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
   detectedStringBadgeInTune: {
-    backgroundColor: Colors.dark.accent,
+    backgroundColor: Colors.dark.inTune,
   },
   detectedStringNumber: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800" as const,
-    color: Colors.dark.background,
-  },
-  detectedStringNumberInTune: {
-    color: "#000",
+    color: Colors.dark.woodDark,
   },
   detectedStringNote: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.dark.text,
+    color: Colors.dark.cream,
     letterSpacing: 0.5,
+    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
   },
   detectedStringRight: {
     alignItems: "flex-end" as const,
   },
   detectedStringFreq: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.dark.textTertiary,
     fontWeight: "500" as const,
     letterSpacing: 0.3,
