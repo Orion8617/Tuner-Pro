@@ -18,8 +18,6 @@ import Animated, {
   withSequence,
   withTiming,
   withSpring,
-  FadeIn,
-  FadeOut,
   Easing,
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
