@@ -8,12 +8,25 @@ import {
   ScrollView,
   Platform,
 } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
 import { TuningConfig, getFreeTunings, getPremiumTunings } from "@/lib/tuner-engine";
 import { t } from "@/lib/i18n";
+
+const ACCENT = "#4AEDC4";
+const ACCENT_DIM = "rgba(74, 237, 196, 0.15)";
+const ACCENT_MED = "rgba(74, 237, 196, 0.35)";
+const BG = "#0A0A0A";
+const SURFACE = "#111111";
+const SURFACE_LIGHT = "#1A1A1A";
+const SURFACE_ELEVATED = "#1E1E1E";
+const TEXT_PRIMARY = "#FFFFFF";
+const TEXT_SECONDARY = "rgba(255, 255, 255, 0.6)";
+const TEXT_DIM = "rgba(255, 255, 255, 0.25)";
+const BORDER = "rgba(255, 255, 255, 0.08)";
+const PREMIUM_COLOR = "#FFD700";
+const PREMIUM_DIM = "rgba(255, 215, 0, 0.12)";
 
 interface TuningSelectorProps {
   currentTuning: TuningConfig;
@@ -70,7 +83,7 @@ export default function TuningSelector({
               {tuning.name}
             </Text>
             {isSelected && (
-              <Ionicons name="checkmark-circle" size={16} color={Colors.dark.inTune} />
+              <Ionicons name="checkmark-circle" size={16} color={ACCENT} />
             )}
           </View>
           <Text style={styles.tuningNotes}>{tuning.shortName}</Text>
@@ -79,12 +92,12 @@ export default function TuningSelector({
         <View style={styles.tuningItemRight}>
           {isLocked ? (
             <View style={styles.lockBadge}>
-              <Ionicons name="lock-closed" size={13} color={Colors.dark.premium} />
+              <Ionicons name="lock-closed" size={13} color={PREMIUM_COLOR} />
               <Text style={styles.lockText}>PRO</Text>
             </View>
           ) : tuning.isPremium ? (
             <View style={styles.unlockedBadge}>
-              <Ionicons name="lock-open" size={12} color={Colors.dark.inTune} />
+              <Ionicons name="lock-open" size={12} color={ACCENT} />
             </View>
           ) : (
             <Text style={styles.freeText}>{t("tuningSelector.free")}</Text>
@@ -103,15 +116,11 @@ export default function TuningSelector({
           setModalVisible(true);
         }}
       >
-        <MaterialCommunityIcons
-          name="guitar-acoustic"
-          size={15}
-          color={Colors.dark.ochre}
-        />
+        <Ionicons name="musical-notes" size={13} color={ACCENT} />
         <Text style={styles.selectorText}>{currentTuning.name}</Text>
         <View style={styles.selectorDivider} />
         <Text style={styles.selectorNotes}>{currentTuning.shortName}</Text>
-        <Ionicons name="chevron-down" size={13} color={Colors.dark.textTertiary} />
+        <Ionicons name="chevron-down" size={12} color={TEXT_DIM} />
       </Pressable>
 
       <Modal
@@ -131,14 +140,14 @@ export default function TuningSelector({
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleRow}>
-                <MaterialCommunityIcons name="guitar-acoustic" size={20} color={Colors.dark.ochre} />
+                <Ionicons name="musical-notes" size={18} color={ACCENT} />
                 <Text style={styles.modalTitle}>{t("tuningSelector.title")}</Text>
               </View>
               <Pressable
                 style={styles.closeButton}
                 onPress={() => setModalVisible(false)}
               >
-                <Ionicons name="close" size={22} color={Colors.dark.textSecondary} />
+                <Ionicons name="close" size={22} color={TEXT_SECONDARY} />
               </Pressable>
             </View>
 
@@ -155,7 +164,7 @@ export default function TuningSelector({
               <View style={styles.premiumHeaderRow}>
                 <Text style={styles.sectionTitle}>{t("tuningSelector.premium")}</Text>
                 <View style={styles.premiumBadgeSmall}>
-                  <Ionicons name="diamond" size={11} color={Colors.dark.premium} />
+                  <Ionicons name="diamond" size={11} color={PREMIUM_COLOR} />
                   <Text style={styles.premiumBadgeText}>PRO</Text>
                 </View>
               </View>
@@ -178,58 +187,54 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 20,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: SURFACE_LIGHT,
+    borderRadius: 16,
     alignSelf: "center",
-    borderWidth: 1.5,
-    borderColor: Colors.dark.border,
-    ...(Platform.OS === "web"
-      ? { boxShadow: "inset 0 1px 2px rgba(0,0,0,0.2)" }
-      : {}),
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   selectorText: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.dark.cream,
+    color: TEXT_PRIMARY,
     letterSpacing: 0.3,
-    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
   },
   selectorDivider: {
     width: 1,
-    height: 14,
-    backgroundColor: Colors.dark.border,
+    height: 12,
+    backgroundColor: BORDER,
   },
   selectorNotes: {
-    fontSize: 11,
-    color: Colors.dark.textTertiary,
+    fontSize: 10,
+    color: TEXT_DIM,
     fontWeight: "500" as const,
     letterSpacing: 0.8,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(10, 6, 3, 0.75)",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
     justifyContent: "flex-end",
   },
   modalDismiss: {
     flex: 1,
   },
   modalContent: {
-    backgroundColor: Colors.dark.surfaceElevated,
+    backgroundColor: SURFACE_ELEVATED,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     maxHeight: "80%",
     paddingHorizontal: 20,
     borderTopWidth: 1,
-    borderColor: Colors.dark.border,
+    borderColor: BORDER,
   },
   modalHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.dark.woodLight,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
     alignSelf: "center",
     marginTop: 12,
     marginBottom: 8,
@@ -246,10 +251,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modalTitle: {
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.dark.cream,
-    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
+    color: TEXT_PRIMARY,
   },
   closeButton: {
     padding: 4,
@@ -258,17 +262,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700" as const,
-    color: Colors.dark.ochre,
+    color: ACCENT,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     marginBottom: 10,
     marginTop: 4,
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: Colors.dark.border,
+    backgroundColor: BORDER,
     marginVertical: 16,
   },
   premiumHeaderRow: {
@@ -280,7 +284,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "rgba(232, 197, 71, 0.1)",
+    backgroundColor: PREMIUM_DIM,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -289,12 +293,12 @@ const styles = StyleSheet.create({
   premiumBadgeText: {
     fontSize: 9,
     fontWeight: "800" as const,
-    color: Colors.dark.premium,
+    color: PREMIUM_COLOR,
     letterSpacing: 0.5,
   },
   premiumHint: {
     fontSize: 12,
-    color: Colors.dark.textTertiary,
+    color: TEXT_DIM,
     marginBottom: 12,
     fontStyle: "italic" as const,
   },
@@ -302,19 +306,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: Colors.dark.surface,
+    backgroundColor: SURFACE,
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.dark.border,
+    borderColor: BORDER,
   },
   tuningItemSelected: {
-    borderColor: Colors.dark.inTune,
-    backgroundColor: Colors.dark.inTuneMuted,
+    borderColor: ACCENT_MED,
+    backgroundColor: ACCENT_DIM,
   },
   tuningItemLocked: {
-    opacity: 0.65,
+    opacity: 0.55,
   },
   tuningItemLeft: {
     flex: 1,
@@ -328,21 +332,20 @@ const styles = StyleSheet.create({
   tuningName: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.dark.cream,
-    fontFamily: Platform.OS === "web" ? "Georgia, serif" : undefined,
+    color: TEXT_PRIMARY,
   },
   tuningNameSelected: {
-    color: Colors.dark.inTune,
+    color: ACCENT,
   },
   tuningNotes: {
     fontSize: 12,
-    color: Colors.dark.ochre,
+    color: TEXT_SECONDARY,
     fontWeight: "500" as const,
     letterSpacing: 1.2,
   },
   tuningGenre: {
     fontSize: 11,
-    color: Colors.dark.textTertiary,
+    color: TEXT_DIM,
     fontStyle: "italic" as const,
   },
   tuningItemRight: {
@@ -352,7 +355,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "rgba(232, 197, 71, 0.1)",
+    backgroundColor: PREMIUM_DIM,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -360,7 +363,7 @@ const styles = StyleSheet.create({
   lockText: {
     fontSize: 9,
     fontWeight: "800" as const,
-    color: Colors.dark.premium,
+    color: PREMIUM_COLOR,
     letterSpacing: 0.5,
   },
   unlockedBadge: {
@@ -368,7 +371,7 @@ const styles = StyleSheet.create({
   },
   freeText: {
     fontSize: 11,
-    color: Colors.dark.inTune,
+    color: ACCENT,
     fontWeight: "600" as const,
     letterSpacing: 0.3,
   },
