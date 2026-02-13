@@ -25,7 +25,6 @@ import { useAuth } from "@/lib/auth-context";
 import { t } from "@/lib/i18n";
 import TunerDial from "@/components/TunerDial";
 import NoteDisplay from "@/components/NoteDisplay";
-import StringSelector from "@/components/StringSelector";
 import TuningSelector from "@/components/TuningSelector";
 import {
   ALL_TUNINGS,
@@ -45,7 +44,6 @@ export default function TunerScreen() {
 
   const [currentTuning, setCurrentTuning] = useState<TuningConfig>(ALL_TUNINGS[0]);
   const [isListening, setIsListening] = useState(false);
-  const [selectedString, setSelectedString] = useState<GuitarString | null>(null);
   const [detectedNote, setDetectedNote] = useState<string | null>(null);
   const [detectedOctave, setDetectedOctave] = useState<number | null>(null);
   const [detectedFrequency, setDetectedFrequency] = useState(0);
@@ -234,7 +232,7 @@ export default function TunerScreen() {
     if (nativeIntervalRef.current) {
       clearInterval(nativeIntervalRef.current);
     }
-    const target = selectedString || currentTuning.strings[0];
+    const target = currentTuning.strings[0];
     let tick = 0;
     nativeIntervalRef.current = setInterval(() => {
       tick++;
@@ -246,7 +244,8 @@ export default function TunerScreen() {
       setDetectedOctave(noteInfo.octave);
       const roundedVar = Math.round(variation);
       setCents(roundedVar);
-      setDetectedString(target);
+      const closest = findClosestString(freq, currentTuning.strings);
+      setDetectedString(closest);
       triggerInTuneHaptic(roundedVar);
     }, 100);
   }
@@ -265,13 +264,8 @@ export default function TunerScreen() {
     }
   }
 
-  function handleStringSelect(s: GuitarString) {
-    setSelectedString(s);
-  }
-
   function handleTuningSelect(tuning: TuningConfig) {
     setCurrentTuning(tuning);
-    setSelectedString(null);
     setDetectedString(null);
     setDetectedNote(null);
     setDetectedOctave(null);
@@ -279,10 +273,8 @@ export default function TunerScreen() {
     setCents(0);
   }
 
-  const targetFreq = selectedString?.frequency || detectedString?.frequency || null;
-  const activeCents = selectedString
-    ? (detectedFrequency > 0 ? getCentsFromTarget(detectedFrequency, selectedString.frequency) : 0)
-    : cents;
+  const targetFreq = detectedString?.frequency || null;
+  const activeCents = cents;
 
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === "web" ? 67 : insets.top }]}>
@@ -369,15 +361,20 @@ export default function TunerScreen() {
         </Text>
       </View>
 
-      <View style={[styles.stringArea, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 }]}>
-        <StringSelector
-          strings={currentTuning.strings}
-          selectedString={selectedString}
-          detectedString={detectedString}
-          onSelect={handleStringSelect}
-          isListening={isListening}
-        />
+      {isListening && detectedString && (
+        <View style={styles.detectedStringBar}>
+          <View style={styles.detectedStringIndicator}>
+            <Text style={styles.detectedStringLabel}>{t("tuner.string")}</Text>
+            <View style={styles.detectedStringBadge}>
+              <Text style={styles.detectedStringNumber}>{detectedString.stringNumber}</Text>
+            </View>
+            <Text style={styles.detectedStringNote}>{detectedString.note}{detectedString.octave}</Text>
+          </View>
+          <Text style={styles.detectedStringFreq}>{detectedString.frequency.toFixed(1)} Hz</Text>
+        </View>
+      )}
 
+      <View style={[styles.bottomArea, { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 }]}>
         <TuningSelector
           currentTuning={currentTuning}
           onSelect={handleTuningSelect}
@@ -471,9 +468,54 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.dark.textTertiary,
   },
-  stringArea: {
+  detectedStringBar: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 20,
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  detectedStringIndicator: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 10,
+  },
+  detectedStringLabel: {
+    fontSize: 13,
+    color: Colors.dark.textTertiary,
+    fontWeight: "500" as const,
+  },
+  detectedStringBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.dark.primary,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  detectedStringNumber: {
+    fontSize: 16,
+    fontWeight: "800" as const,
+    color: Colors.dark.background,
+  },
+  detectedStringNote: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+    color: Colors.dark.text,
+  },
+  detectedStringFreq: {
+    fontSize: 13,
+    color: Colors.dark.textTertiary,
+    fontWeight: "500" as const,
+  },
+  bottomArea: {
     flex: 1,
     justifyContent: "flex-end",
-    gap: 12,
+    paddingHorizontal: 0,
   },
 });

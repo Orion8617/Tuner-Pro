@@ -5,6 +5,7 @@ const translations = {
     "tuner.permissionDenied": "Microphone permission denied",
     "tuner.playString": "Play a string...",
     "tuner.tapToStart": "Tap to start",
+    "tuner.string": "String",
 
     "noteDisplay.inTune": "In Tune",
     "noteDisplay.flat": "Flat",
@@ -92,6 +93,7 @@ const translations = {
     "tuner.permissionDenied": "Permiso de micrófono denegado",
     "tuner.playString": "Toca una cuerda...",
     "tuner.tapToStart": "Toca para comenzar",
+    "tuner.string": "Cuerda",
 
     "noteDisplay.inTune": "Afinado",
     "noteDisplay.flat": "Bajo",
