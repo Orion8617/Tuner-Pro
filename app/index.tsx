@@ -85,7 +85,7 @@ export default function TunerScreen() {
   const tuningStatus = isDetecting ? getTuningStatus(cents) : null;
   const isInTune = tuningStatus === "in_tune";
 
-  const dialSize = Math.min(screenWidth * 0.85, 340);
+  const dialSize = Math.min(screenWidth * 0.95, 380);
 
   useEffect(() => {
     if (isListening) {
@@ -253,10 +253,6 @@ export default function TunerScreen() {
     ? `${cents >= 0 ? (cents > 0 ? "+" : "") : ""}${String(Math.abs(cents)).padStart(3, "0")}.0`
     : "000.0";
 
-  const freqDisplay = isDetecting
-    ? `${detectedFrequency.toFixed(1)}`
-    : "---.-";
-
   const sortedStrings = [...currentTuning.strings].sort((a, b) => a.stringNumber - b.stringNumber);
 
   const stringAreaWidth = Math.min(screenWidth - 40, 360);
@@ -341,61 +337,39 @@ export default function TunerScreen() {
 
       {/* ===== MAIN CONTENT ===== */}
       <View style={{ flex: 1, paddingTop: safeTop + 44 }}>
-        {/* ===== DIAL ===== */}
+        {/* ===== DIAL with integrated displays ===== */}
         <View style={styles.dialContainer}>
-          <TunerDial cents={cents} isActive={isDetecting} size={dialSize} />
+          <TunerDial
+            cents={cents}
+            isActive={isDetecting}
+            size={dialSize}
+            note={detectedNote}
+            octave={detectedOctave}
+            frequency={detectedFrequency}
+            statusColor={statusColor}
+            centsDisplay={centsDisplay}
+            isInTune={isInTune}
+          />
         </View>
 
-        {/* ===== FREQUENCY DISPLAY ===== */}
-        <View style={styles.freqRow}>
-          <View style={styles.lcdBox}>
-            <Text style={styles.lcdPrefix}>0</Text>
-            <Text style={styles.lcdValue}>{freqDisplay}</Text>
-            <Text style={styles.lcdUnit}>Hz</Text>
-          </View>
-        </View>
-
-        {/* ===== BIG NOTE DISPLAY ===== */}
-        <View style={styles.noteContainer}>
-          <View style={styles.noteRow}>
-            {/* Cents left */}
-            <View style={styles.centsBox}>
-              <Text style={[styles.centsValue, { color: isDetecting ? statusColor : TEXT_DIM }]}>
-                {cents < 0 ? "-" : isDetecting && cents > 0 ? "+" : ""}{centsDisplay}
+        {/* ===== STATUS INDICATOR ===== */}
+        <View style={styles.statusRow}>
+          {isDetecting && tuningStatus ? (
+            <View style={[styles.statusIndicator, { borderColor: statusColor + "40", backgroundColor: statusColor + "10" }]}>
+              <Ionicons
+                name={isInTune ? "checkmark-circle" : tuningStatus === "flat" ? "arrow-down" : "arrow-up"}
+                size={16}
+                color={statusColor}
+              />
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {isInTune ? t("noteDisplay.inTune") : tuningStatus === "flat" ? t("noteDisplay.flat") : t("noteDisplay.sharp")}
               </Text>
-              <Text style={styles.centsLabel}>Cent</Text>
             </View>
-
-            {/* Note center */}
-            <View style={styles.noteBig}>
-              <Text style={[styles.noteChar, { color: isDetecting ? statusColor : TEXT_DIM }]}>
-                {detectedNote || "--"}
-              </Text>
-              {detectedOctave !== null && isDetecting && (
-                <Text style={[styles.noteOctaveBig, { color: statusColor }]}>{detectedOctave}</Text>
-              )}
-            </View>
-
-            {/* Status right */}
-            <View style={styles.statusBox}>
-              {isDetecting && tuningStatus ? (
-                <View style={[styles.statusIndicator, { borderColor: statusColor + "40", backgroundColor: statusColor + "10" }]}>
-                  <Ionicons
-                    name={isInTune ? "checkmark-circle" : tuningStatus === "flat" ? "arrow-down" : "arrow-up"}
-                    size={16}
-                    color={statusColor}
-                  />
-                  <Text style={[styles.statusText, { color: statusColor }]}>
-                    {isInTune ? t("noteDisplay.inTune") : tuningStatus === "flat" ? t("noteDisplay.flat") : t("noteDisplay.sharp")}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.placeholderText}>
-                  {permissionDenied ? t("tuner.permissionDenied") : isListening ? t("tuner.playString") : ""}
-                </Text>
-              )}
-            </View>
-          </View>
+          ) : (
+            <Text style={styles.placeholderText}>
+              {permissionDenied ? t("tuner.permissionDenied") : isListening ? t("tuner.playString") : ""}
+            </Text>
+          )}
         </View>
 
         {/* ===== STRING SELECTOR ===== */}
@@ -505,91 +479,13 @@ const styles = StyleSheet.create({
   },
   dialContainer: {
     alignItems: "center",
+    marginTop: 0,
+  },
+  statusRow: {
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 4,
-  },
-  freqRow: {
-    alignItems: "center",
-    marginTop: -8,
-  },
-  lcdBox: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    backgroundColor: SURFACE,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-  },
-  lcdPrefix: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: TEXT_DIM,
-    fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
-    fontVariant: ["tabular-nums"] as any,
-  },
-  lcdValue: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: ACCENT,
-    fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
-    fontVariant: ["tabular-nums"] as any,
-  },
-  lcdUnit: {
-    fontSize: 10,
-    fontWeight: "600" as const,
-    color: TEXT_MED,
-    marginLeft: 4,
-  },
-  noteContainer: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-  },
-  noteRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  centsBox: {
-    flex: 1,
-    alignItems: "flex-start" as const,
-    paddingLeft: 4,
-  },
-  centsValue: {
-    fontSize: 18,
-    fontWeight: "700" as const,
-    fontFamily: Platform.OS === "web" ? "'Courier New', monospace" : undefined,
-    fontVariant: ["tabular-nums"] as any,
-    letterSpacing: 1,
-  },
-  centsLabel: {
-    fontSize: 10,
-    color: TEXT_MED,
-    fontWeight: "500" as const,
-    marginTop: 1,
-  },
-  noteBig: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "center",
-    minWidth: 100,
-  },
-  noteChar: {
-    fontSize: 72,
-    fontWeight: "200" as const,
-    letterSpacing: 2,
-    lineHeight: 80,
-  },
-  noteOctaveBig: {
-    fontSize: 24,
-    fontWeight: "400" as const,
-    marginTop: 8,
-    opacity: 0.7,
-  },
-  statusBox: {
-    flex: 1,
-    alignItems: "flex-end" as const,
-    paddingRight: 4,
+    minHeight: 28,
   },
   statusIndicator: {
     flexDirection: "row",
