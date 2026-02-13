@@ -10,7 +10,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useSharedValue,
@@ -285,27 +285,58 @@ export default function TunerScreen() {
           )}
         </Pressable>
 
-        <View style={styles.titleArea}>
-          <Text style={styles.titleText}>Guitar tuner</Text>
-          <MaterialCommunityIcons name="tune-vertical" size={16} color={TEXT_MED} style={{ marginLeft: 6 }} />
-        </View>
+        <TuningSelector
+          currentTuning={currentTuning}
+          onSelect={handleTuningSelect}
+          isPremiumUser={!!user?.isPremium}
+          onPremiumRequired={() => router.push("/premium")}
+        />
 
-        <Pressable
-          style={styles.topBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push("/premium");
-          }}
-        >
-          {user?.isPremium ? (
-            <View style={styles.proChip}>
-              <Ionicons name="diamond" size={10} color={ACCENT} />
-              <Text style={styles.proChipText}>PRO</Text>
-            </View>
-          ) : (
-            <Ionicons name="settings-outline" size={18} color={TEXT_MED} />
-          )}
-        </Pressable>
+        <View style={styles.topRightGroup}>
+          <View style={styles.micBtnWrap}>
+            <Animated.View
+              style={[
+                {
+                  position: "absolute",
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: ACCENT,
+                },
+                micPulseStyle,
+              ]}
+            />
+            <Animated.View style={micScaleStyle}>
+              <Pressable
+                style={[styles.micBtnSmall, isListening && styles.micBtnActive]}
+                onPress={toggleListening}
+              >
+                <Ionicons
+                  name={isListening ? "stop" : "mic"}
+                  size={16}
+                  color={isListening ? RED : "#FFF"}
+                />
+              </Pressable>
+            </Animated.View>
+          </View>
+
+          <Pressable
+            style={styles.topBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/premium");
+            }}
+          >
+            {user?.isPremium ? (
+              <View style={styles.proChip}>
+                <Ionicons name="diamond" size={10} color={ACCENT} />
+                <Text style={styles.proChipText}>PRO</Text>
+              </View>
+            ) : (
+              <Ionicons name="settings-outline" size={18} color={TEXT_MED} />
+            )}
+          </Pressable>
+        </View>
       </View>
 
       {/* ===== MAIN CONTENT ===== */}
@@ -391,7 +422,7 @@ export default function TunerScreen() {
         </View>
 
         {/* ===== STRINGS VISUAL ===== */}
-        <View style={[styles.stringsVisual, { width: stringAreaWidth }]}>
+        <View style={[styles.stringsVisual, { width: stringAreaWidth, marginBottom: safeBottom + 10 }]}>
           {sortedStrings.map((str, i) => {
             const isActive = detectedString?.stringNumber === str.stringNumber;
             const isTuned = tunedStrings.has(str.stringNumber);
@@ -421,49 +452,6 @@ export default function TunerScreen() {
             );
           })}
         </View>
-
-        {/* ===== MIC BUTTON ===== */}
-        <View style={[styles.micArea, { paddingBottom: safeBottom + 6 }]}>
-          <TuningSelector
-            currentTuning={currentTuning}
-            onSelect={handleTuningSelect}
-            isPremiumUser={!!user?.isPremium}
-            onPremiumRequired={() => router.push("/premium")}
-          />
-
-          <View style={styles.micBtnWrap}>
-            <Animated.View
-              style={[
-                {
-                  position: "absolute",
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  backgroundColor: ACCENT,
-                },
-                micPulseStyle,
-              ]}
-            />
-            <Animated.View style={micScaleStyle}>
-              <Pressable
-                style={[styles.micBtn, isListening && styles.micBtnActive]}
-                onPress={toggleListening}
-              >
-                <Ionicons
-                  name={isListening ? "stop" : "mic"}
-                  size={22}
-                  color={isListening ? RED : "#FFF"}
-                />
-              </Pressable>
-            </Animated.View>
-          </View>
-
-          <View style={{ width: 100, alignItems: "flex-end" as const }}>
-            <Text style={styles.tapHint}>
-              {isListening ? t("tuner.playString") : t("tuner.tapToStart")}
-            </Text>
-          </View>
-        </View>
       </View>
     </View>
   );
@@ -483,16 +471,6 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   topBtn: { padding: 6, minWidth: 34 },
-  titleArea: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  titleText: {
-    fontSize: 16,
-    fontWeight: "600" as const,
-    color: "#FFF",
-    letterSpacing: 0.3,
-  },
   userChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -667,38 +645,27 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.06)",
   },
-  micArea: {
+  topRightGroup: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    gap: 6,
   },
   micBtnWrap: {
     alignItems: "center",
     justifyContent: "center",
   },
-  micBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  micBtnSmall: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: SURFACE_LIGHT,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }
-      : { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 10 }),
   },
   micBtnActive: {
     backgroundColor: "rgba(255, 68, 68, 0.15)",
     borderColor: "rgba(255, 68, 68, 0.3)",
-  },
-  tapHint: {
-    fontSize: 9,
-    color: TEXT_DIM,
-    fontWeight: "500" as const,
-    textAlign: "right" as const,
   },
 });
