@@ -89,7 +89,13 @@ export default function TunerDial({
   const segW = 7;
   const segGap = ARC_SPAN / TOTAL_OUTER;
 
-  const currentNorm = isActive ? Math.max(0, Math.min(1, (Math.max(-50, Math.min(50, cents)) + 50) / 100)) : 0.5;
+  const currentNorm = (() => {
+    if (!isActive) return 0.5;
+    const clamped = Math.max(-50, Math.min(50, cents));
+    const linear = clamped / 50;
+    const eased = Math.sign(linear) * Math.pow(Math.abs(linear), 1.6);
+    return Math.max(0, Math.min(1, (eased + 1) / 2));
+  })();
 
   const outerSegments = [];
   for (let i = 0; i < TOTAL_OUTER; i++) {
