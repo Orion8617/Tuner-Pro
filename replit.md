@@ -56,13 +56,16 @@ Preferred communication style: Simple, everyday language.
 ### Pricing & Payment (LemonSqueezy + Solana Pay)
 
 #### Solana Pay (Phantom wallet — crypto option)
-- Lifetime Access: **14.99 USDC** on Solana mainnet
-- **Payment flow**: User selects Lifetime plan → taps "Pay with Phantom" → backend generates Solana Pay URL with unique reference key + USDC mint → app opens URL (Phantom deep link on Android, browser fallback) → user confirms in Phantom → backend polls `getSignaturesForAddress(reference)` every 3s for up to 2 min → on confirmation activates lifetime subscription
-- **Endpoints**: `POST /api/checkout/solana/create` (generates URL + session), `GET /api/checkout/solana/verify` (checks blockchain)
-- **Required env var**: `SOLANA_WALLET_ADDRESS` — your Phantom/Solana wallet address to receive payments
-- **Optional env var**: `SOLANA_RPC_URL` — defaults to `https://api.mainnet-beta.solana.com`
+- **Quarterly (3 months)**: 4.99 USDC or 0.035 SOL — gives 90 days access
+- **Lifetime**: 14.99 USDC or 0.10 SOL — permanent access
+- **Payment flow**: User selects plan (quarterly/lifetime) → picks token (USDC/SOL) → taps Phantom button → backend generates Solana Pay URL with unique reference key → app opens Phantom → user confirms → backend polls blockchain every 3s for up to 2 min → activates subscription
+- **Endpoints**: `POST /api/checkout/solana/create` (body: `{userId, plan: quarterly|lifetime, token: usdc|sol}`) → `GET /api/checkout/solana/verify` (checks blockchain)
+- **Required env var**: `SOLANA_WALLET_ADDRESS` — Phantom wallet address (`HUAiWhbJiX8WQTZJ8m139RYdDHjhq9pfSm5yH54xAfEt`)
+- **Optional env vars**: `SOLANA_RPC_URL` (defaults to mainnet-beta), `SOLANA_QUARTERLY_SOL` (default 0.035), `SOLANA_LIFETIME_SOL` (default 0.10)
 - **USDC mint** (Solana mainnet): `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
-- **Frontend**: Purple (#9945FF) Phantom button visible only on Lifetime plan tab; polls backend after redirecting to wallet
+- **SOL payments**: URL omits `spl-token` param — native SOL transfer
+- **Frontend**: Purple (#9945FF) Phantom button + USDC/SOL token toggle visible for quarterly and lifetime plans
+- **SDK note**: `@phantom/react-native-sdk` v1.0.7 (social login embedded wallet) requires native APK build — NOT compatible with Expo Go. For production APK: needs `PHANTOM_APP_ID` from phantom.com/portal
 
 ### Pricing & Payment (LemonSqueezy)
 - Monthly: $1.99/month

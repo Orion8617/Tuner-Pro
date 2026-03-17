@@ -6,7 +6,7 @@ export interface Subscription {
   userId: string;
   lemonSqueezyId: string;
   orderId: string;
-  plan: "monthly" | "annual" | "lifetime";
+  plan: "monthly" | "quarterly" | "annual" | "lifetime";
   status: "active" | "cancelled" | "expired" | "paused";
   currentPeriodEnd: string;
   createdAt: string;
@@ -17,8 +17,10 @@ export interface SolanaPaySession {
   id: string;
   userId: string;
   reference: string;
-  plan: "lifetime";
+  plan: "quarterly" | "lifetime";
+  token: "usdc" | "sol";
   amountUsdc: number;
+  amountSol?: number;
   status: "pending" | "confirmed" | "expired";
   createdAt: string;
   expiresAt: string;
@@ -32,7 +34,14 @@ export interface IStorage {
   getSubscriptionByLemonSqueezyId(lsId: string): Promise<Subscription | undefined>;
   upsertSubscription(sub: Omit<Subscription, "id" | "createdAt" | "updatedAt">): Promise<Subscription>;
   updateSubscriptionStatus(lemonSqueezyId: string, status: Subscription["status"]): Promise<void>;
-  createSolanaSession(data: { userId: string; reference: string; amountUsdc: number }): Promise<SolanaPaySession>;
+  createSolanaSession(data: {
+    userId: string;
+    reference: string;
+    plan: "quarterly" | "lifetime";
+    token: "usdc" | "sol";
+    amountUsdc: number;
+    amountSol?: number;
+  }): Promise<SolanaPaySession>;
   getSolanaSession(reference: string): Promise<SolanaPaySession | undefined>;
   confirmSolanaSession(reference: string): Promise<void>;
 }
@@ -111,7 +120,14 @@ export class MemStorage implements IStorage {
     }
   }
 
-  async createSolanaSession(data: { userId: string; reference: string; amountUsdc: number }): Promise<SolanaPaySession> {
+  async createSolanaSession(data: {
+    userId: string;
+    reference: string;
+    plan: "quarterly" | "lifetime";
+    token: "usdc" | "sol";
+    amountUsdc: number;
+    amountSol?: number;
+  }): Promise<SolanaPaySession> {
     const id = randomUUID();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 30 * 60 * 1000);
@@ -119,8 +135,10 @@ export class MemStorage implements IStorage {
       id,
       userId: data.userId,
       reference: data.reference,
-      plan: "lifetime",
+      plan: data.plan,
+      token: data.token,
       amountUsdc: data.amountUsdc,
+      amountSol: data.amountSol,
       status: "pending",
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
