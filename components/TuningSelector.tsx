@@ -11,28 +11,63 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { TuningConfig, getFreeTunings, getPremiumTunings } from "@/lib/tuner-engine";
 import { t } from "@/lib/i18n";
 
 const ACCENT = "#4AEDC4";
-const ACCENT_DIM = "rgba(74, 237, 196, 0.15)";
-const ACCENT_MED = "rgba(74, 237, 196, 0.35)";
-const BG = "#0A0A0A";
+const ACCENT_DIM = "rgba(74, 237, 196, 0.12)";
+const ACCENT_MED = "rgba(74, 237, 196, 0.28)";
+const BG = "#080808";
 const SURFACE = "#111111";
-const SURFACE_LIGHT = "#1A1A1A";
-const SURFACE_ELEVATED = "#1E1E1E";
+const SURFACE_ELEVATED = "#181818";
 const TEXT_PRIMARY = "#FFFFFF";
-const TEXT_SECONDARY = "rgba(255, 255, 255, 0.6)";
-const TEXT_DIM = "rgba(255, 255, 255, 0.25)";
-const BORDER = "rgba(255, 255, 255, 0.08)";
-const PREMIUM_COLOR = "#FFD700";
-const PREMIUM_DIM = "rgba(255, 215, 0, 0.12)";
+const TEXT_SECONDARY = "rgba(255, 255, 255, 0.55)";
+const TEXT_DIM = "rgba(255, 255, 255, 0.22)";
+const BORDER = "rgba(255, 255, 255, 0.07)";
+const PREMIUM_COLOR = "#E8C547";
+const PREMIUM_DIM = "rgba(232, 197, 71, 0.12)";
 
 interface TuningSelectorProps {
   currentTuning: TuningConfig;
   onSelect: (tuning: TuningConfig) => void;
   isPremiumUser: boolean;
   onPremiumRequired: () => void;
+}
+
+const GENRE_ORDER = [
+  "All Genres",
+  "Folk / Acoustic",
+  "Alternative / Folk",
+  "Jazz / Fusion",
+  "Rock / Metal / Grunge",
+  "Blues / Rock / Country",
+  "Celtic / Folk / Rock",
+  "Blues / Folk / Slide",
+  "Blues / Rock / Slide",
+  "Metal / Hard Rock",
+];
+
+const GENRE_ICONS: Record<string, string> = {
+  "All Genres": "globe-outline",
+  "Folk / Acoustic": "leaf-outline",
+  "Alternative / Folk": "radio-outline",
+  "Jazz / Fusion": "cafe-outline",
+  "Rock / Metal / Grunge": "flash-outline",
+  "Blues / Rock / Country": "sunny-outline",
+  "Celtic / Folk / Rock": "earth-outline",
+  "Blues / Folk / Slide": "water-outline",
+  "Blues / Rock / Slide": "flame-outline",
+  "Metal / Hard Rock": "skull-outline",
+};
+
+function groupByGenre(tunings: TuningConfig[]) {
+  const map: Record<string, TuningConfig[]> = {};
+  for (const t of tunings) {
+    if (!map[t.genre]) map[t.genre] = [];
+    map[t.genre].push(t);
+  }
+  return map;
 }
 
 export default function TuningSelector({
@@ -46,6 +81,7 @@ export default function TuningSelector({
 
   const freeTunings = getFreeTunings();
   const premiumTunings = getPremiumTunings();
+  const premiumByGenre = groupByGenre(premiumTunings);
 
   function handleSelect(tuning: TuningConfig) {
     if (tuning.isPremium && !isPremiumUser) {
@@ -65,10 +101,11 @@ export default function TuningSelector({
     return (
       <Pressable
         key={tuning.id}
-        style={[
+        style={({ pressed }) => [
           styles.tuningItem,
           isSelected && styles.tuningItemSelected,
           isLocked && styles.tuningItemLocked,
+          pressed && styles.tuningItemPressed,
         ]}
         onPress={() => handleSelect(tuning)}
       >
@@ -83,21 +120,20 @@ export default function TuningSelector({
               {tuning.name}
             </Text>
             {isSelected && (
-              <Ionicons name="checkmark-circle" size={16} color={ACCENT} />
+              <Ionicons name="checkmark-circle" size={14} color={ACCENT} />
             )}
           </View>
           <Text style={styles.tuningNotes}>{tuning.shortName}</Text>
-          <Text style={styles.tuningGenre}>{tuning.genre}</Text>
         </View>
         <View style={styles.tuningItemRight}>
           {isLocked ? (
             <View style={styles.lockBadge}>
-              <Ionicons name="lock-closed" size={13} color={PREMIUM_COLOR} />
+              <Ionicons name="lock-closed" size={11} color={PREMIUM_COLOR} />
               <Text style={styles.lockText}>PRO</Text>
             </View>
           ) : tuning.isPremium ? (
             <View style={styles.unlockedBadge}>
-              <Ionicons name="lock-open" size={12} color={ACCENT} />
+              <Ionicons name="checkmark-circle" size={13} color={ACCENT} />
             </View>
           ) : (
             <Text style={styles.freeText}>{t("tuningSelector.free")}</Text>
@@ -110,17 +146,17 @@ export default function TuningSelector({
   return (
     <>
       <Pressable
-        style={styles.selectorButton}
+        style={({ pressed }) => [styles.selectorButton, pressed && styles.selectorButtonPressed]}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           setModalVisible(true);
         }}
       >
-        <Ionicons name="musical-notes" size={13} color={ACCENT} />
+        <Ionicons name="musical-notes" size={12} color={ACCENT} />
         <Text style={styles.selectorText}>{currentTuning.name}</Text>
         <View style={styles.selectorDivider} />
         <Text style={styles.selectorNotes}>{currentTuning.shortName}</Text>
-        <Ionicons name="chevron-down" size={12} color={TEXT_DIM} />
+        <Ionicons name="chevron-down" size={11} color={TEXT_DIM} />
       </Pressable>
 
       <Modal
@@ -134,20 +170,20 @@ export default function TuningSelector({
           <View
             style={[
               styles.modalContent,
-              { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 16 },
+              { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 20 },
             ]}
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleRow}>
-                <Ionicons name="musical-notes" size={18} color={ACCENT} />
+                <Ionicons name="musical-notes" size={17} color={ACCENT} />
                 <Text style={styles.modalTitle}>{t("tuningSelector.title")}</Text>
               </View>
               <Pressable
-                style={styles.closeButton}
+                style={({ pressed }) => [styles.closeButton, pressed && { opacity: 0.6 }]}
                 onPress={() => setModalVisible(false)}
               >
-                <Ionicons name="close" size={22} color={TEXT_SECONDARY} />
+                <Ionicons name="close" size={20} color={TEXT_SECONDARY} />
               </Pressable>
             </View>
 
@@ -164,16 +200,36 @@ export default function TuningSelector({
               <View style={styles.premiumHeaderRow}>
                 <Text style={styles.sectionTitle}>{t("tuningSelector.premium")}</Text>
                 <View style={styles.premiumBadgeSmall}>
-                  <Ionicons name="diamond" size={11} color={PREMIUM_COLOR} />
+                  <Ionicons name="diamond" size={10} color={PREMIUM_COLOR} />
                   <Text style={styles.premiumBadgeText}>PRO</Text>
                 </View>
               </View>
+
               {!isPremiumUser && (
                 <Text style={styles.premiumHint}>
                   {t("tuningSelector.premiumHint")}
                 </Text>
               )}
-              {premiumTunings.map(renderTuningItem)}
+
+              {Object.entries(premiumByGenre)
+                .sort(([a], [b]) => {
+                  const ia = GENRE_ORDER.indexOf(a);
+                  const ib = GENRE_ORDER.indexOf(b);
+                  return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+                })
+                .map(([genre, tunings]) => (
+                  <View key={genre} style={styles.genreGroup}>
+                    <View style={styles.genreHeader}>
+                      <Ionicons
+                        name={(GENRE_ICONS[genre] || "musical-note-outline") as any}
+                        size={12}
+                        color={TEXT_DIM}
+                      />
+                      <Text style={styles.genreLabel}>{genre}</Text>
+                    </View>
+                    {tunings.map(renderTuningItem)}
+                  </View>
+                ))}
             </ScrollView>
           </View>
         </View>
@@ -190,21 +246,25 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    backgroundColor: SURFACE_LIGHT,
+    backgroundColor: "#181818",
     borderRadius: 16,
     alignSelf: "center",
     borderWidth: 1,
     borderColor: BORDER,
   },
+  selectorButtonPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.97 }],
+  },
   selectorText: {
     fontSize: 13,
     fontWeight: "600" as const,
     color: TEXT_PRIMARY,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   selectorDivider: {
     width: 1,
-    height: 12,
+    height: 11,
     backgroundColor: BORDER,
   },
   selectorNotes: {
@@ -215,29 +275,29 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    backgroundColor: "rgba(0, 0, 0, 0.85)",
     justifyContent: "flex-end",
   },
   modalDismiss: {
     flex: 1,
   },
   modalContent: {
-    backgroundColor: SURFACE_ELEVATED,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    backgroundColor: "#141414",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: "80%",
     paddingHorizontal: 20,
     borderTopWidth: 1,
-    borderColor: BORDER,
+    borderColor: "rgba(255,255,255,0.06)",
   },
   modalHandle: {
-    width: 36,
+    width: 34,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
     alignSelf: "center",
     marginTop: 12,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   modalHeader: {
     flexDirection: "row",
@@ -251,7 +311,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700" as const,
     color: TEXT_PRIMARY,
   },
@@ -262,17 +322,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700" as const,
     color: ACCENT,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
+    textTransform: "uppercase" as const,
+    letterSpacing: 1.4,
     marginBottom: 10,
     marginTop: 4,
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: BORDER,
+    backgroundColor: "rgba(255,255,255,0.05)",
     marginVertical: 16,
   },
   premiumHeaderRow: {
@@ -285,9 +345,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     backgroundColor: PREMIUM_DIM,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: 8,
     marginBottom: 6,
   },
   premiumBadgeText: {
@@ -299,8 +359,26 @@ const styles = StyleSheet.create({
   premiumHint: {
     fontSize: 12,
     color: TEXT_DIM,
-    marginBottom: 12,
+    marginBottom: 14,
     fontStyle: "italic" as const,
+    lineHeight: 17,
+  },
+  genreGroup: {
+    marginBottom: 6,
+  },
+  genreHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  genreLabel: {
+    fontSize: 10,
+    fontWeight: "600" as const,
+    color: TEXT_DIM,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.8,
   },
   tuningItem: {
     flexDirection: "row",
@@ -308,8 +386,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: SURFACE,
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: BORDER,
   },
@@ -318,11 +397,15 @@ const styles = StyleSheet.create({
     backgroundColor: ACCENT_DIM,
   },
   tuningItemLocked: {
-    opacity: 0.55,
+    opacity: 0.5,
+  },
+  tuningItemPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.99 }],
   },
   tuningItemLeft: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   tuningNameRow: {
     flexDirection: "row",
@@ -338,15 +421,10 @@ const styles = StyleSheet.create({
     color: ACCENT,
   },
   tuningNotes: {
-    fontSize: 12,
+    fontSize: 11,
     color: TEXT_SECONDARY,
     fontWeight: "500" as const,
     letterSpacing: 1.2,
-  },
-  tuningGenre: {
-    fontSize: 11,
-    color: TEXT_DIM,
-    fontStyle: "italic" as const,
   },
   tuningItemRight: {
     paddingLeft: 12,
@@ -356,9 +434,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     backgroundColor: PREMIUM_DIM,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(232, 197, 71, 0.2)",
   },
   lockText: {
     fontSize: 9,
@@ -367,10 +447,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   unlockedBadge: {
-    padding: 6,
+    padding: 5,
   },
   freeText: {
-    fontSize: 11,
+    fontSize: 10,
     color: ACCENT,
     fontWeight: "600" as const,
     letterSpacing: 0.3,

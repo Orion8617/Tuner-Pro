@@ -18,6 +18,7 @@ function RootLayoutNav() {
       screenOptions={{
         headerBackTitle: "Back",
         contentStyle: { backgroundColor: Colors.dark.background },
+        animation: "fade",
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -26,6 +27,7 @@ function RootLayoutNav() {
         options={{
           presentation: "modal",
           headerShown: false,
+          animation: "slide_from_bottom",
         }}
       />
       <Stack.Screen
@@ -33,6 +35,7 @@ function RootLayoutNav() {
         options={{
           presentation: "modal",
           headerShown: false,
+          animation: "slide_from_bottom",
         }}
       />
     </Stack>
@@ -40,7 +43,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
     DMSans_600SemiBold,
@@ -48,12 +51,12 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <ErrorBoundary>

@@ -20,6 +20,8 @@ import Animated, {
   withTiming,
   withSpring,
   Easing,
+  FadeIn,
+  FadeOut,
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
@@ -40,16 +42,214 @@ import {
 } from "@/lib/tuner-engine";
 
 const ACCENT = "#4AEDC4";
-const ACCENT_DIM = "rgba(74, 237, 196, 0.15)";
-const ACCENT_MED = "rgba(74, 237, 196, 0.35)";
-const ACCENT_BRIGHT = "rgba(74, 237, 196, 0.8)";
+const ACCENT_DIM = "rgba(74, 237, 196, 0.13)";
+const ACCENT_MED = "rgba(74, 237, 196, 0.32)";
+const ACCENT_BRIGHT = "rgba(74, 237, 196, 0.75)";
 const RED = "#FF4444";
 const ORANGE = "#FF9544";
-const BG = "#0A0A0A";
+const BG = "#080808";
+const BG_SURFACE = "#0E0E0E";
 const SURFACE = "#111111";
-const SURFACE_LIGHT = "#1A1A1A";
-const TEXT_DIM = "rgba(255, 255, 255, 0.25)";
-const TEXT_MED = "rgba(255, 255, 255, 0.5)";
+const SURFACE_LIGHT = "#181818";
+const SURFACE_ELEVATED = "#1C1C1C";
+const TEXT_DIM = "rgba(255, 255, 255, 0.2)";
+const TEXT_MED = "rgba(255, 255, 255, 0.45)";
+const TEXT_BRIGHT = "rgba(255, 255, 255, 0.85)";
+
+function StringVisual({
+  str,
+  isActive,
+  isTuned,
+  isInTune,
+  statusColor,
+  thickness,
+  xPos,
+}: {
+  str: GuitarString;
+  isActive: boolean;
+  isTuned: boolean;
+  isInTune: boolean;
+  statusColor: string;
+  thickness: number;
+  xPos: number;
+}) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+  const glowOpacity = useSharedValue(0);
+  const checkOpacity = useSharedValue(0);
+  const prevTuned = useRef(false);
+
+  useEffect(() => {
+    if (isTuned && !prevTuned.current) {
+      scale.value = withSequence(
+        withSpring(1.8, { damping: 6, stiffness: 220 }),
+        withSpring(1.2, { damping: 10, stiffness: 150 }),
+        withTiming(1, { duration: 400 })
+      );
+      glowOpacity.value = withSequence(
+        withTiming(1, { duration: 100 }),
+        withTiming(0.5, { duration: 600 }),
+        withTiming(0.3, { duration: 800 })
+      );
+      checkOpacity.value = withSequence(
+        withTiming(0, { duration: 80 }),
+        withTiming(1, { duration: 280, easing: Easing.out(Easing.back(1.5)) })
+      );
+    } else if (!isTuned) {
+      checkOpacity.value = withTiming(0, { duration: 200 });
+      glowOpacity.value = withTiming(0, { duration: 300 });
+      scale.value = withTiming(1, { duration: 200 });
+    }
+    prevTuned.current = isTuned;
+  }, [isTuned]);
+
+  useEffect(() => {
+    if (isActive && isInTune) {
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.6, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.3, { duration: 900, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+    } else if (isActive && !isTuned) {
+      glowOpacity.value = withTiming(0, { duration: 200 });
+    }
+  }, [isActive, isInTune]);
+
+  const stringStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: scale.value }],
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: checkOpacity.value,
+    transform: [{ scale: checkOpacity.value }],
+  }));
+
+  const baseColor = isActive
+    ? (isInTune ? ACCENT : statusColor)
+    : isTuned ? ACCENT_MED : "rgba(255,255,255,0.09)";
+
+  const glowColor = isTuned ? ACCENT : ACCENT_MED;
+
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: xPos - thickness / 2,
+        top: 0,
+        bottom: 0,
+        width: thickness,
+        alignItems: "center",
+      }}
+    >
+      {(isActive || isTuned) && (
+        <Animated.View
+          style={[
+            {
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              width: thickness + 10,
+              backgroundColor: glowColor,
+              borderRadius: 6,
+            },
+            glowStyle,
+          ]}
+        />
+      )}
+
+      <Animated.View
+        style={[
+          {
+            width: thickness,
+            height: "100%",
+            backgroundColor: baseColor,
+            borderRadius: thickness / 2,
+          },
+          ...(Platform.OS === "web" && isActive
+            ? [{
+                boxShadow: `0 0 ${isInTune ? 14 : 6}px ${isInTune ? "rgba(74, 237, 196, 0.5)" : "rgba(255,255,255,0.06)"}`,
+              } as any]
+            : []),
+          stringStyle,
+        ]}
+      />
+    </View>
+  );
+}
+
+function StringIndicator({
+  str,
+  isActive,
+  isTuned,
+  isInTune,
+  statusColor,
+}: {
+  str: GuitarString;
+  isActive: boolean;
+  isTuned: boolean;
+  isInTune: boolean;
+  statusColor: string;
+}) {
+  const dotScale = useSharedValue(1);
+  const dotGlow = useSharedValue(0);
+  const prevTuned = useRef(false);
+
+  useEffect(() => {
+    if (isTuned && !prevTuned.current) {
+      dotScale.value = withSequence(
+        withSpring(1.5, { damping: 5, stiffness: 300 }),
+        withSpring(1.1, { damping: 10, stiffness: 200 }),
+        withTiming(1, { duration: 300 })
+      );
+      dotGlow.value = withSequence(
+        withTiming(1, { duration: 80 }),
+        withTiming(0.5, { duration: 500 })
+      );
+    } else if (!isTuned) {
+      dotScale.value = withTiming(1, { duration: 200 });
+      dotGlow.value = withTiming(0, { duration: 200 });
+    }
+    prevTuned.current = isTuned;
+  }, [isTuned]);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: dotScale.value }],
+    opacity: dotGlow.value * 0.5 + 0.5,
+  }));
+
+  const strColor = isActive
+    ? (isInTune ? ACCENT : statusColor)
+    : isTuned ? ACCENT_MED : TEXT_DIM;
+
+  return (
+    <View style={styles.stringItem}>
+      <Animated.View style={dotStyle}>
+        <Text style={[styles.stringNote, { color: strColor }]}>
+          {str.note}
+          <Text style={styles.stringOctaveSub}>{str.octave}</Text>
+        </Text>
+      </Animated.View>
+      <Text style={[styles.stringFreq, { color: isActive ? strColor : TEXT_DIM }]}>
+        {str.frequency.toFixed(1)}Hz
+      </Text>
+      {isTuned && (
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          style={{ marginTop: 2 }}
+        >
+          <Ionicons name="checkmark-circle" size={10} color={ACCENT} />
+        </Animated.View>
+      )}
+    </View>
+  );
+}
 
 export default function TunerScreen() {
   const insets = useSafeAreaInsets();
@@ -77,6 +277,7 @@ export default function TunerScreen() {
 
   const micPulseOpacity = useSharedValue(0);
   const micButtonScale = useSharedValue(1);
+  const screenOpacity = useSharedValue(0);
 
   const safeTop = Platform.OS === "web" ? 67 : insets.top;
   const safeBottom = Platform.OS === "web" ? 34 : insets.bottom;
@@ -88,17 +289,21 @@ export default function TunerScreen() {
   const dialSize = Math.min(screenWidth * 0.95, 380);
 
   useEffect(() => {
+    screenOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
+  }, []);
+
+  useEffect(() => {
     if (isListening) {
       micPulseOpacity.value = withRepeat(
         withSequence(
-          withTiming(0.5, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: 1000, easing: Easing.inOut(Easing.ease) })
+          withTiming(0.45, { duration: 1100, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0, { duration: 1100, easing: Easing.inOut(Easing.ease) })
         ),
         -1,
         true
       );
     } else {
-      micPulseOpacity.value = withTiming(0, { duration: 300 });
+      micPulseOpacity.value = withTiming(0, { duration: 250 });
     }
   }, [isListening]);
 
@@ -112,6 +317,11 @@ export default function TunerScreen() {
       });
     }
   }, [tuningStatus, detectedString]);
+
+  const screenStyle = useAnimatedStyle(() => ({
+    opacity: screenOpacity.value,
+    flex: 1,
+  }));
 
   const micPulseStyle = useAnimatedStyle(() => ({
     opacity: micPulseOpacity.value,
@@ -238,11 +448,10 @@ export default function TunerScreen() {
     tick();
   }
 
-
   function toggleListening() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     micButtonScale.value = withSequence(
-      withSpring(0.85, { damping: 8, stiffness: 200 }),
+      withSpring(0.86, { damping: 8, stiffness: 200 }),
       withSpring(1, { damping: 6, stiffness: 120 })
     );
     if (isListening) stopListening(); else startListening();
@@ -260,13 +469,14 @@ export default function TunerScreen() {
     : TEXT_DIM;
 
   const centsDisplay = isDetecting
-    ? `${cents >= 0 ? (cents > 0 ? "+" : "") : ""}${String(Math.abs(cents)).padStart(3, "0")}.0`
+    ? `${cents >= 0 ? (cents > 0 ? "" : "") : ""}${String(Math.abs(cents)).padStart(3, "0")}.0`
     : "000.0";
 
   const sortedStrings = [...currentTuning.strings].sort((a, b) => a.stringNumber - b.stringNumber);
 
   const stringAreaWidth = Math.min(screenWidth - 40, 360);
   const stringSpacing = stringAreaWidth / 7;
+  const thicknesses = [3.5, 3, 2.5, 2, 1.5, 1.2];
 
   return (
     <View style={[styles.container, { backgroundColor: BG }]}>
@@ -279,171 +489,159 @@ export default function TunerScreen() {
         onError={handleNativeError}
       />
 
-      {/* ===== TOP BAR ===== */}
-      <View style={[styles.topBar, { top: safeTop }]}>
-        <Pressable
-          style={styles.topBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            if (user) router.push("/premium"); else router.push("/(auth)/login");
-          }}
-        >
-          {user ? (
-            <View style={styles.userChip}>
-              <Ionicons name="person" size={10} color={ACCENT} />
-              <Text style={styles.userChipText} numberOfLines={1}>{user.username}</Text>
-            </View>
-          ) : (
-            <Ionicons name="person-circle-outline" size={20} color={TEXT_MED} />
-          )}
-        </Pressable>
-
-        <TuningSelector
-          currentTuning={currentTuning}
-          onSelect={handleTuningSelect}
-          isPremiumUser={!!user?.isPremium}
-          onPremiumRequired={() => router.push("/premium")}
-        />
-
-        <View style={styles.topRightGroup}>
-          <View style={styles.micBtnWrap}>
-            <Animated.View
-              style={[
-                {
-                  position: "absolute",
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: ACCENT,
-                },
-                micPulseStyle,
-              ]}
-            />
-            <Animated.View style={micScaleStyle}>
-              <Pressable
-                style={[styles.micBtnSmall, isListening && styles.micBtnActive]}
-                onPress={toggleListening}
-              >
-                <Ionicons
-                  name={isListening ? "stop" : "mic"}
-                  size={16}
-                  color={isListening ? RED : "#FFF"}
-                />
-              </Pressable>
-            </Animated.View>
-          </View>
-
+      <Animated.View style={screenStyle}>
+        {/* ===== TOP BAR ===== */}
+        <View style={[styles.topBar, { top: safeTop }]}>
           <Pressable
-            style={styles.topBtn}
+            style={({ pressed }) => [styles.topBtn, pressed && styles.topBtnPressed]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/premium");
+              if (user) router.push("/premium"); else router.push("/(auth)/login");
             }}
           >
-            {user?.isPremium ? (
-              <View style={styles.proChip}>
-                <Ionicons name="diamond" size={10} color={ACCENT} />
-                <Text style={styles.proChipText}>PRO</Text>
+            {user ? (
+              <View style={styles.userChip}>
+                <Ionicons name="person" size={10} color={ACCENT} />
+                <Text style={styles.userChipText} numberOfLines={1}>{user.username}</Text>
               </View>
             ) : (
-              <Ionicons name="settings-outline" size={18} color={TEXT_MED} />
+              <Ionicons name="person-circle-outline" size={20} color={TEXT_MED} />
             )}
           </Pressable>
-        </View>
-      </View>
 
-      {/* ===== MAIN CONTENT ===== */}
-      <View style={{ flex: 1, paddingTop: safeTop + 44 }}>
-        {/* ===== DIAL with integrated displays ===== */}
-        <View style={styles.dialContainer}>
-          <TunerDial
-            cents={cents}
-            isActive={isDetecting}
-            size={dialSize}
-            note={detectedNote}
-            octave={detectedOctave}
-            frequency={detectedFrequency}
-            statusColor={statusColor}
-            centsDisplay={centsDisplay}
-            isInTune={isInTune}
+          <TuningSelector
+            currentTuning={currentTuning}
+            onSelect={handleTuningSelect}
+            isPremiumUser={!!user?.isPremium}
+            onPremiumRequired={() => router.push("/premium")}
           />
-        </View>
 
-        {/* ===== STATUS INDICATOR ===== */}
-        <View style={styles.statusRow}>
-          {isDetecting && tuningStatus ? (
-            <View style={[styles.statusIndicator, { borderColor: statusColor + "40", backgroundColor: statusColor + "10" }]}>
-              <Ionicons
-                name={isInTune ? "checkmark-circle" : tuningStatus === "flat" ? "arrow-down" : "arrow-up"}
-                size={16}
-                color={statusColor}
+          <View style={styles.topRightGroup}>
+            <View style={styles.micBtnWrap}>
+              <Animated.View
+                style={[
+                  {
+                    position: "absolute",
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: ACCENT,
+                  },
+                  micPulseStyle,
+                ]}
               />
-              <Text style={[styles.statusText, { color: statusColor }]}>
-                {isInTune ? t("noteDisplay.inTune") : tuningStatus === "flat" ? t("noteDisplay.flat") : t("noteDisplay.sharp")}
-              </Text>
+              <Animated.View style={micScaleStyle}>
+                <Pressable
+                  style={[styles.micBtnSmall, isListening && styles.micBtnActive]}
+                  onPress={toggleListening}
+                >
+                  <Ionicons
+                    name={isListening ? "stop" : "mic"}
+                    size={16}
+                    color={isListening ? RED : TEXT_BRIGHT}
+                  />
+                </Pressable>
+              </Animated.View>
             </View>
-          ) : (
-            <Text style={styles.placeholderText}>
-              {permissionDenied ? t("tuner.permissionDenied") : isListening ? t("tuner.playString") : ""}
-            </Text>
-          )}
+
+            <Pressable
+              style={({ pressed }) => [styles.topBtn, pressed && styles.topBtnPressed]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/premium");
+              }}
+            >
+              {user?.isPremium ? (
+                <View style={styles.proChip}>
+                  <Ionicons name="diamond" size={10} color={ACCENT} />
+                  <Text style={styles.proChipText}>PRO</Text>
+                </View>
+              ) : (
+                <Ionicons name="settings-outline" size={18} color={TEXT_MED} />
+              )}
+            </Pressable>
+          </View>
         </View>
 
-        {/* ===== STRING SELECTOR ===== */}
-        <View style={styles.stringSelector}>
-          {sortedStrings.map((str) => {
-            const isActive = detectedString?.stringNumber === str.stringNumber;
-            const isTuned = tunedStrings.has(str.stringNumber);
-            const strColor = isActive
-              ? (isInTune ? ACCENT : statusColor)
-              : isTuned ? ACCENT_MED : TEXT_DIM;
+        {/* ===== MAIN CONTENT ===== */}
+        <View style={{ flex: 1, paddingTop: safeTop + 44 }}>
+          {/* ===== DIAL with integrated displays ===== */}
+          <View style={styles.dialContainer}>
+            <TunerDial
+              cents={cents}
+              isActive={isDetecting}
+              size={dialSize}
+              note={detectedNote}
+              octave={detectedOctave}
+              frequency={detectedFrequency}
+              statusColor={statusColor}
+              centsDisplay={centsDisplay}
+              isInTune={isInTune}
+            />
+          </View>
 
-            return (
-              <View key={str.stringNumber} style={styles.stringItem}>
-                <Text style={[styles.stringNote, { color: strColor }]}>
-                  {str.note}
-                  <Text style={styles.stringOctaveSub}>{str.octave}</Text>
-                </Text>
-                <Text style={[styles.stringFreq, { color: isActive ? strColor : TEXT_DIM }]}>
-                  {str.frequency.toFixed(1)}Hz
+          {/* ===== STATUS INDICATOR ===== */}
+          <View style={styles.statusRow}>
+            {isDetecting && tuningStatus ? (
+              <View style={[styles.statusIndicator, { borderColor: statusColor + "30", backgroundColor: statusColor + "0D" }]}>
+                <Ionicons
+                  name={isInTune ? "checkmark-circle" : tuningStatus === "flat" ? "arrow-down" : "arrow-up"}
+                  size={14}
+                  color={statusColor}
+                />
+                <Text style={[styles.statusText, { color: statusColor }]}>
+                  {isInTune ? t("noteDisplay.inTune") : tuningStatus === "flat" ? t("noteDisplay.flat") : t("noteDisplay.sharp")}
                 </Text>
               </View>
-            );
-          })}
-        </View>
+            ) : (
+              <Text style={styles.placeholderText}>
+                {permissionDenied ? t("tuner.permissionDenied") : isListening ? t("tuner.playString") : ""}
+              </Text>
+            )}
+          </View>
 
-        {/* ===== STRINGS VISUAL ===== */}
-        <View style={[styles.stringsVisual, { width: stringAreaWidth, marginBottom: safeBottom + 10 }]}>
-          {sortedStrings.map((str, i) => {
-            const isActive = detectedString?.stringNumber === str.stringNumber;
-            const isTuned = tunedStrings.has(str.stringNumber);
-            const thicknesses = [3.5, 3, 2.5, 2, 1.5, 1.2];
-            const thickness = thicknesses[i] || 2;
-            const xPos = stringSpacing * (i + 1);
-            const baseColor = isActive
-              ? (isInTune ? ACCENT : statusColor)
-              : isTuned ? ACCENT_MED : "rgba(255,255,255,0.12)";
+          {/* ===== STRING SELECTOR ===== */}
+          <View style={styles.stringSelector}>
+            {sortedStrings.map((str) => {
+              const isActive = detectedString?.stringNumber === str.stringNumber;
+              const isTuned = tunedStrings.has(str.stringNumber);
+              return (
+                <StringIndicator
+                  key={str.stringNumber}
+                  str={str}
+                  isActive={isActive}
+                  isTuned={isTuned}
+                  isInTune={isInTune}
+                  statusColor={statusColor}
+                />
+              );
+            })}
+          </View>
 
-            return (
-              <View
-                key={str.stringNumber}
-                style={{
-                  position: "absolute" as const,
-                  left: xPos - thickness / 2,
-                  top: 0,
-                  bottom: 0,
-                  width: thickness,
-                  backgroundColor: baseColor,
-                  borderRadius: thickness / 2,
-                  ...(isActive && Platform.OS === "web"
-                    ? { boxShadow: `0 0 ${isInTune ? 12 : 6}px ${isInTune ? ACCENT_DIM : "rgba(255,255,255,0.05)"}` }
-                    : {}),
-                }}
-              />
-            );
-          })}
+          {/* ===== STRINGS VISUAL ===== */}
+          <View style={[styles.stringsVisual, { width: stringAreaWidth, marginBottom: safeBottom + 10 }]}>
+            {sortedStrings.map((str, i) => {
+              const isActive = detectedString?.stringNumber === str.stringNumber;
+              const isTuned = tunedStrings.has(str.stringNumber);
+              const thickness = thicknesses[i] || 2;
+              const xPos = stringSpacing * (i + 1);
+
+              return (
+                <StringVisual
+                  key={str.stringNumber}
+                  str={str}
+                  isActive={isActive}
+                  isTuned={isTuned}
+                  isInTune={isInTune}
+                  statusColor={statusColor}
+                  thickness={thickness}
+                  xPos={xPos}
+                />
+              );
+            })}
+          </View>
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -462,14 +660,20 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   topBtn: { padding: 6, minWidth: 34 },
+  topBtnPressed: {
+    opacity: 0.6,
+    transform: [{ scale: 0.95 }],
+  },
   userChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: SURFACE_LIGHT,
+    backgroundColor: SURFACE_ELEVATED,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(74, 237, 196, 0.12)",
   },
   userChipText: {
     fontSize: 10,
@@ -486,7 +690,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(74, 237, 196, 0.2)",
+    borderColor: "rgba(74, 237, 196, 0.18)",
   },
   proChipText: {
     fontSize: 9,
@@ -501,34 +705,36 @@ const styles = StyleSheet.create({
   statusRow: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4,
+    marginTop: 6,
     minHeight: 28,
   },
   statusIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 12,
-    gap: 4,
+    borderRadius: 20,
+    gap: 5,
     borderWidth: 1,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700" as const,
-    letterSpacing: 0.3,
+    letterSpacing: 0.8,
+    textTransform: "uppercase" as const,
   },
   placeholderText: {
-    fontSize: 10,
+    fontSize: 11,
     color: TEXT_DIM,
     fontWeight: "500" as const,
+    letterSpacing: 0.3,
   },
   stringSelector: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 2,
     paddingHorizontal: 16,
-    marginTop: 16,
+    marginTop: 14,
   },
   stringItem: {
     flex: 1,
@@ -536,16 +742,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   stringNote: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700" as const,
     letterSpacing: 0.5,
   },
   stringOctaveSub: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "400" as const,
   },
   stringFreq: {
-    fontSize: 8,
+    fontSize: 7.5,
     fontWeight: "500" as const,
     marginTop: 2,
     fontVariant: ["tabular-nums"] as any,
@@ -556,7 +762,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     minHeight: 60,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
+    borderTopColor: "rgba(255,255,255,0.05)",
   },
   topRightGroup: {
     flexDirection: "row",
@@ -573,12 +779,12 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     backgroundColor: SURFACE_LIGHT,
     borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.1)",
     alignItems: "center",
     justifyContent: "center",
   },
   micBtnActive: {
-    backgroundColor: "rgba(255, 68, 68, 0.15)",
-    borderColor: "rgba(255, 68, 68, 0.3)",
+    backgroundColor: "rgba(255, 68, 68, 0.12)",
+    borderColor: "rgba(255, 68, 68, 0.28)",
   },
 });
