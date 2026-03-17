@@ -16,20 +16,35 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.guitartune",
+      "bundleIdentifier": "com.guitartune.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "GuitarTune needs microphone access to detect the pitch of your guitar strings for tuning."
+        "NSMicrophoneUsageDescription": "GuitarTune needs microphone access to detect the pitch of your guitar strings for tuning.",
+        "NSMicrophoneUsageDescriptionEs": "GuitarTune necesita acceso al micrófono para detectar el tono de tus cuerdas de guitarra.",
+        "UIBackgroundModes": []
       }
     },
     "android": {
-      "package": "com.guitartune",
-      "permissions": ["RECORD_AUDIO"],
+      "package": "com.guitartune.app",
+      "versionCode": 1,
+      "permissions": ["android.permission.RECORD_AUDIO"],
       "adaptiveIcon": {
         "backgroundColor": "#0A0A14",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "guitartune"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -43,11 +58,29 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "REEMPLAZA-CON-TU-PROJECT-ID"
+      }
     }
   }
 }
