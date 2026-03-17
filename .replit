@@ -72,3 +72,8 @@ task = "shell.exec"
 args = "npm run expo:dev"
 waitForPort = 8081
 ensurePreviewReachable = "/status"
+
+[userenv]
+
+[userenv.shared]
+SOLANA_WALLET_ADDRESS = "HUAiWhbJiX8WQTZJ8m139RYdDHjhq9pfSm5yH54xAfEt"
