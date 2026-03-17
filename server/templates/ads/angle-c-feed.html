@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GuitarTune Ad — Angle C Feed 1080×1080</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100vw;
+    height: 100vw;
+    overflow: hidden;
+    background: #0A0A0A;
+    font-family: 'Arial Black', Arial, sans-serif;
+  }
+  .root {
+    width: 100vw;
+    height: 100vw;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .corner-mark {
+    position: absolute; top: 0; right: 0;
+    width: 0; height: 0;
+    border-top: 11.1vw solid #4AEDC4;
+    border-left: 11.1vw solid transparent;
+  }
+  .badge {
+    position: absolute; top: 5.2vw; left: 5.2vw;
+    background: #4AEDC4; color: #0A0A0A;
+    font-size: 2vw; font-weight: 900; letter-spacing: 0.28vw;
+    text-transform: uppercase; padding: 0.9vw 2vw; border-radius: 0.37vw;
+  }
+  .main-text {
+    font-size: 6.3vw; font-weight: 900; color: #fff;
+    text-align: center; line-height: 1.05; max-width: 84vw;
+    letter-spacing: -0.09vw; margin-bottom: 5.9vw;
+  }
+  .main-text span { color: #4AEDC4; }
+  .rule-list { display: flex; flex-direction: column; gap: 1.85vw; align-items: flex-start; margin-bottom: 7.4vw; }
+  .rule {
+    display: flex; align-items: center; gap: 1.7vw;
+    font-size: 2.4vw; color: #888; font-weight: 700; letter-spacing: 0.09vw;
+  }
+  .rule-dot { width: 1.1vw; height: 1.1vw; border-radius: 50%; background: #4AEDC4; flex-shrink: 0; }
+  .rule-active { color: #fff; }
+  .bottom-row {
+    position: absolute; bottom: 5.2vw; left: 5.2vw; right: 5.2vw;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .price-block { text-align: left; }
+  .price-label { font-size: 1.7vw; color: #444; font-weight: 700; letter-spacing: 0.18vw; text-transform: uppercase; margin-bottom: 0.37vw; }
+  .price-value { font-size: 3.7vw; font-weight: 900; color: #4AEDC4; }
+  .price-sub { font-size: 1.7vw; color: #333; font-weight: 700; }
+  .cta {
+    background: #4AEDC4; color: #0A0A0A;
+    font-size: 2.4vw; font-weight: 900; padding: 1.7vw 3.9vw;
+    border-radius: 5vw; letter-spacing: 0.1vw; text-transform: uppercase;
+  }
+  .xs-label {
+    position: absolute; bottom: 1.5vw; left: 0; right: 0;
+    text-align: center; font-size: 1.7vw; color: #1a1a1a;
+    letter-spacing: 0.18vw; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="root">
+  <div class="corner-mark"></div>
+  <div class="badge">GuitarTune</div>
+
+  <div class="main-text">
+    The tuner for<br>
+    guitarists who<br>
+    <span>take it seriously.</span>
+  </div>
+
+  <div class="rule-list">
+    <div class="rule"><div class="rule-dot"></div><span class="rule-active">Chromatic pitch detection to ±1 cent</span></div>
+    <div class="rule"><div class="rule-dot"></div><span class="rule-active">15 tunings — Drop D, Open G, DADGAD</span></div>
+    <div class="rule"><div class="rule-dot"></div><span class="rule-active">No ads interrupting your flow</span></div>
+    <div class="rule"><div class="rule-dot"></div>EN / ES bilingual support</div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="price-block">
+      <div class="price-label">Pro from</div>
+      <div class="price-value">$0.83<span style="font-size:1.85vw;color:#444">/mo</span></div>
+      <div class="price-sub">78% less than GuitarTuna</div>
+    </div>
+    <div class="cta">Get GuitarTune</div>
+  </div>
+
+  <div class="xs-label">guitartune.app</div>
+</div>
+</body>
+</html>

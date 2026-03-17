@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GuitarTune Ad — Angle A Portrait 1080×1350</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100vw;
+    height: 125vw; /* 1350/1080 = 1.25 */
+    overflow: hidden;
+    background: #0A0A0A;
+    font-family: 'Arial Black', Arial, sans-serif;
+  }
+  .root {
+    width: 100vw;
+    height: 125vw;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .top-bar { position: absolute; top: 0; left: 0; right: 0; height: 0.74vw; background: #ff4444; }
+  .badge {
+    position: absolute;
+    top: 4.8vw;
+    left: 4.8vw;
+    background: #4AEDC4;
+    color: #0A0A0A;
+    font-size: 2vw;
+    font-weight: 900;
+    letter-spacing: 0.28vw;
+    text-transform: uppercase;
+    padding: 0.9vw 2vw;
+    border-radius: 0.37vw;
+  }
+  .main-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .competitor-block {
+    border: 0.18vw solid #222;
+    border-radius: 1.5vw;
+    padding: 3.3vw 4.8vw;
+    margin-bottom: 4.4vw;
+    text-align: center;
+    position: relative;
+    width: 76vw;
+  }
+  .competitor-block::before {
+    content: "THEM";
+    position: absolute;
+    top: -1.3vw;
+    left: 3vw;
+    background: #0A0A0A;
+    padding: 0 1.1vw;
+    font-size: 1.5vw;
+    color: #444;
+    font-weight: 900;
+    letter-spacing: 0.28vw;
+  }
+  .competitor-name { font-size: 3.3vw; font-weight: 900; color: #444; letter-spacing: 0.1vw; margin-bottom: 1.5vw; }
+  .competitor-issue { font-size: 2.6vw; color: #ff4444; font-weight: 700; line-height: 1.3; }
+  .vs-divider {
+    width: 6.5vw; height: 6.5vw; border-radius: 50%;
+    border: 0.28vw solid #4AEDC4;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.4vw; font-weight: 900; color: #4AEDC4;
+    margin: 0 auto 4.4vw auto;
+  }
+  .us-block {
+    border: 0.18vw solid #4AEDC4;
+    border-radius: 1.5vw;
+    padding: 3.3vw 4.8vw;
+    text-align: center;
+    position: relative;
+    width: 76vw;
+    background: #0D1A17;
+  }
+  .us-block::before {
+    content: "GUITARTUNE";
+    position: absolute;
+    top: -1.3vw;
+    left: 3vw;
+    background: #0D1A17;
+    padding: 0 1.1vw;
+    font-size: 1.5vw;
+    color: #4AEDC4;
+    font-weight: 900;
+    letter-spacing: 0.28vw;
+  }
+  .us-headline { font-size: 4.1vw; font-weight: 900; color: #4AEDC4; line-height: 1.1; margin-bottom: 1.5vw; }
+  .us-sub { font-size: 2.4vw; color: #8DF5DE; font-weight: 600; }
+  .features { display: flex; gap: 3vw; margin-top: 7.4vw; justify-content: center; }
+  .feature-pill {
+    background: #111; border: 0.09vw solid #222; border-radius: 5vw;
+    padding: 1.5vw 2.6vw; font-size: 2vw; color: #ccc; font-weight: 700;
+  }
+  .feature-pill.active { border-color: #4AEDC4; color: #4AEDC4; }
+  .cta-btn {
+    margin-top: 7.4vw;
+    background: #4AEDC4; color: #0A0A0A;
+    font-size: 2.8vw; font-weight: 900; padding: 2vw 6.7vw;
+    border-radius: 5vw; letter-spacing: 0.1vw; text-transform: uppercase;
+  }
+  .url {
+    position: absolute; bottom: 3.7vw; left: 0; right: 0;
+    text-align: center; font-size: 2vw; color: #2a2a2a;
+    letter-spacing: 0.28vw; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="root">
+  <div class="top-bar"></div>
+  <div class="badge">GuitarTune</div>
+
+  <div class="main-content">
+    <div class="competitor-block">
+      <div class="competitor-name">GuitarTuna</div>
+      <div class="competitor-issue">Ads every 30 seconds.<br>Even while you're tuning.</div>
+    </div>
+
+    <div class="vs-divider">VS</div>
+
+    <div class="us-block">
+      <div class="us-headline">Zero ads.<br>Ever.</div>
+      <div class="us-sub">Same accuracy. 78% cheaper.</div>
+    </div>
+
+    <div class="features">
+      <div class="feature-pill active">No Ads</div>
+      <div class="feature-pill active">Drop D</div>
+      <div class="feature-pill">Open G</div>
+      <div class="feature-pill active">Free</div>
+    </div>
+
+    <div class="cta-btn">Download Free</div>
+  </div>
+
+  <div class="url">guitartune.app</div>
+</div>
+</body>
+</html>

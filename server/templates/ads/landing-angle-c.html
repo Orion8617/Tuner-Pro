@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuitarTune — Built for Serious Guitarists</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { --cyan: #4AEDC4; --bg: #0A0A0A; --surface: #111; }
+  body { background: var(--bg); color: #fff; font-family: 'Arial Black', Arial, sans-serif; min-height: 100vh; }
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 24px 40px; border-bottom: 1px solid #1a1a1a; }
+  .logo { font-size: 22px; font-weight: 900; color: var(--cyan); letter-spacing: 2px; }
+  .nav-cta { background: var(--cyan); color: #0A0A0A; font-size: 15px; font-weight: 900; padding: 10px 24px; border-radius: 50px; text-decoration: none; text-transform: uppercase; letter-spacing: 1px; }
+  .hero { max-width: 900px; margin: 0 auto; padding: 80px 24px 60px; text-align: center; }
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 700; color: var(--cyan); letter-spacing: 4px; text-transform: uppercase; border: 1px solid #1a3a2e; background: #0D1A17; padding: 8px 20px; border-radius: 4px; margin-bottom: 36px; }
+  .hero h1 { font-size: clamp(40px, 7vw, 80px); font-weight: 900; line-height: 1.0; letter-spacing: -2px; margin-bottom: 28px; }
+  .hero h1 span { color: var(--cyan); }
+  .hero p { font-size: 20px; color: #888; font-weight: 600; line-height: 1.5; max-width: 580px; margin: 0 auto 48px; }
+  .cta-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn-primary { background: var(--cyan); color: #0A0A0A; font-size: 18px; font-weight: 900; padding: 18px 44px; border-radius: 50px; text-decoration: none; letter-spacing: 1px; text-transform: uppercase; }
+  .specs-section { max-width: 900px; margin: 80px auto; padding: 0 24px; }
+  .specs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2px; border: 1px solid #1a1a1a; border-radius: 12px; overflow: hidden; }
+  .spec-item { padding: 36px 28px; background: var(--surface); }
+  .spec-item.highlight { background: #0D1A17; border-color: var(--cyan); }
+  .spec-num { font-size: 52px; font-weight: 900; color: var(--cyan); letter-spacing: -2px; line-height: 1; margin-bottom: 8px; }
+  .spec-name { font-size: 14px; font-weight: 700; color: #555; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+  .spec-detail { font-size: 14px; color: #444; font-weight: 600; line-height: 1.4; }
+  .credibility-section { padding: 80px 24px; text-align: center; background: #111; }
+  .cred-title { font-size: 36px; font-weight: 900; margin-bottom: 48px; }
+  .cred-title span { color: var(--cyan); }
+  .cred-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px; max-width: 900px; margin: 0 auto; }
+  .cred-card { background: #0A0A0A; border: 1px solid #1a1a1a; border-radius: 12px; padding: 28px; text-align: left; }
+  .cred-quote { font-size: 16px; color: #888; font-weight: 600; line-height: 1.6; margin-bottom: 16px; font-style: normal; }
+  .cred-stars { font-size: 18px; margin-bottom: 8px; color: #FFD700; }
+  .cred-author { font-size: 12px; color: #444; font-weight: 700; letter-spacing: 1px; }
+  .pricing-section { max-width: 700px; margin: 80px auto; padding: 0 24px; text-align: center; }
+  .pricing-title { font-size: 36px; font-weight: 900; margin-bottom: 48px; }
+  .pricing-title span { color: var(--cyan); }
+  .price-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .price-card { border-radius: 12px; padding: 32px; text-align: left; }
+  .price-card.them { background: #0A0A0A; border: 1px solid #1a1a1a; }
+  .price-card.us { background: #0D1A17; border: 1px solid var(--cyan); }
+  .price-brand { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+  .price-brand.them-label { color: #444; }
+  .price-brand.us-label { color: var(--cyan); }
+  .price-amount { font-size: 42px; font-weight: 900; margin-bottom: 8px; }
+  .price-amount.them-price { color: #666; }
+  .price-amount.us-price { color: var(--cyan); }
+  .price-note { font-size: 13px; color: #444; font-weight: 600; }
+  .price-note.us-note { color: #555; }
+  .final-cta { padding: 80px 24px; text-align: center; }
+  .final-cta h2 { font-size: 48px; font-weight: 900; margin-bottom: 16px; }
+  .final-cta h2 span { color: var(--cyan); }
+  .final-cta p { font-size: 18px; color: #666; margin-bottom: 36px; }
+  footer { padding: 32px 40px; border-top: 1px solid #111; text-align: center; color: #333; font-size: 13px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+  <nav>
+    <div class="logo">GuitarTune</div>
+    <a href="#download" class="nav-cta">Download Free</a>
+  </nav>
+
+  <section class="hero">
+    <div class="eyebrow">For serious guitarists</div>
+    <h1>
+      The tuner built<br>
+      for players who<br>
+      <span>take it seriously.</span>
+    </h1>
+    <p>Professional-grade pitch detection. 15 tunings. Zero compromises. Built by guitarists who were tired of ads interrupting every session.</p>
+    <div class="cta-group">
+      <a href="#" class="btn-primary" id="download">Download Free</a>
+    </div>
+  </section>
+
+  <section class="specs-section">
+    <div class="specs-grid">
+      <div class="spec-item highlight">
+        <div class="spec-num">±1¢</div>
+        <div class="spec-name">Accuracy</div>
+        <div class="spec-detail">Autocorrelation pitch detection — same algorithm used in pro studio software</div>
+      </div>
+      <div class="spec-item highlight">
+        <div class="spec-num">10</div>
+        <div class="spec-name">Tunings</div>
+        <div class="spec-detail">Standard, Drop D, Open G, DADGAD, Open D, Open E, Drop C + 3 more free</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-num">0</div>
+        <div class="spec-name">Ads</div>
+        <div class="spec-detail">Ad-free core tuner — always. No timer, no "watch an ad to continue"</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-num">2</div>
+        <div class="spec-name">Languages</div>
+        <div class="spec-detail">English and Spanish — auto-detected from your device settings</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="credibility-section">
+    <h2 class="cred-title">Players who <span>switched</span></h2>
+    <div class="cred-grid">
+      <div class="cred-card">
+        <div class="cred-stars">★★★★★</div>
+        <div class="cred-quote">"Finally a tuner that doesn't assault me with ads between every string. Switched from GuitarTuna and never looking back."</div>
+        <div class="cred-author">App Store Review · Guitarist, Austin TX</div>
+      </div>
+      <div class="cred-card">
+        <div class="cred-stars">★★★★★</div>
+        <div class="cred-quote">"Drop D and Open G in one app with no ads? That's all I needed. Clean, fast, accurate."</div>
+        <div class="cred-author">App Store Review · Singer-Songwriter</div>
+      </div>
+      <div class="cred-card">
+        <div class="cred-stars">★★★★★</div>
+        <div class="cred-quote">"The dial UI is exactly what a pro tuner should look like. The cents readout is precise. Worth every penny of the $9.99."</div>
+        <div class="cred-author">App Store Review · Studio Session Guitarist</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pricing-section">
+    <h2 class="pricing-title">Fair price. <span>Serious value.</span></h2>
+    <div class="price-compare">
+      <div class="price-card them">
+        <div class="price-brand them-label">GuitarTuna Pro</div>
+        <div class="price-amount them-price">$47.99</div>
+        <div class="price-note">/year to remove ads</div>
+      </div>
+      <div class="price-card us">
+        <div class="price-brand us-label">GuitarTune Pro</div>
+        <div class="price-amount us-price">$9.99</div>
+        <div class="price-note us-note">/year · 78% less</div>
+      </div>
+    </div>
+    <p style="margin-top:24px;font-size:14px;color:#333;font-weight:600;">Or try free — the core tuner never has ads.</p>
+  </section>
+
+  <section class="final-cta">
+    <h2>Built for guitarists who <span>take it seriously.</span></h2>
+    <p>Download free. Upgrade when you're ready.</p>
+    <a href="#" class="btn-primary">Download on App Store</a>
+  </section>
+
+  <footer>© 2026 GuitarTune · guitartune.app · Built for serious guitarists.</footer>
+</body>
+</html>

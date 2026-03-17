@@ -130,7 +130,39 @@ Preferred communication style: Simple, everyday language.
 
 ## Market Strategy
 
-- **Target markets**: US and Europe (English-speaking users)
-- **Positioning**: "No ads, no bloat, fair price" — 78% cheaper than competitors
-- **ASO keywords**: guitar tuner, no ads, drop d tuner, accurate tuner, open g tuning
+- **Target markets**: US and Europe (English-speaking users), Mexico (bilingual advantage)
+- **Positioning**: "No ads, no bloat, fair price" — 78% cheaper than competitors (Dunford statement in competitive-analysis report)
+- **ASO keywords**: guitar tuner, no ads, drop d tuner, accurate tuner, open g tuning, guitartuna alternative
 - **Freemium model**: Standard + 3 alternative tunings free, 6 premium tunings for $1.99/mo or $9.99/yr
+
+### Go-To-Market Assets (built March 2026)
+
+#### Competitive Analysis Report
+- **Route**: `/competitive-analysis` (HTML report, also `server/templates/competitive-analysis.html`)
+- **Contents**: Dunford positioning statement, feature matrix (GuitarTune vs 4 competitors), 2×2 positioning map, white space analysis, 3 battlecard recommendations
+- **Data source**: `server/seo-data.ts` — `COMPETITORS` array
+
+#### Ad Creative Assets (3 Angles)
+- **Location**: `server/templates/ads/`
+- **Served at**: `/ads/<filename>.html`
+- **Files**:
+  - Angle A (Pain — "GuitarTuna shows ads while you're tuning. We don't."): `angle-a-feed.html` (1080×1080), `angle-a-portrait.html` (1080×1350), `landing-angle-a.html`
+  - Angle B (Outcome — "In tune in under 10 seconds. No ads. Ever."): `angle-b-feed.html`, `angle-b-portrait.html`, `landing-angle-b.html`
+  - Angle C (Identity — "The tuner for guitarists who take it seriously."): `angle-c-feed.html`, `angle-c-portrait.html`, `landing-angle-c.html`
+- **Spec**: Viewport-relative, flat dark (#0A0A0A) + cyan (#4AEDC4), embed-ready as iframes
+
+#### Google RSA + TikTok Copy
+- **Route**: `/ad-copy` (HTML document, also `server/templates/ad-copy.html`)
+- **Contents**: 15 Google RSA headlines (≤30 chars), 5 descriptions (≤90 chars), 3 TikTok Spark Ad scripts (hook + body + CTA, ≤60s), targeting parameters for both platforms
+
+#### Programmatic SEO Pages
+- **Routes**: Registered in `server/seo-routes.ts`, data in `server/seo-data.ts`
+- **Hub pages**: `/compare` (all competitor comparisons), `/tunings` (all tuning guides)
+- **Competitor comparison pages**: `/vs/[slug]` — 8 competitors: guitartuna, fender-tune, boss-tuner, pano-tuner, chromatic-guitar-tuner, guitar-tuna-pro, ultimate-guitar-tuner, n-track-tuner
+- **Tuning guide pages**: `/tunings/[slug]` — 15 tunings: standard, drop-d, open-g, dadgad, open-d, open-e, drop-c, double-drop-d, open-c, all-fourths, drop-b, open-a, half-step-down, whole-step-down, nashville
+- **SEO features**: SSR-rendered, canonical URLs, FAQPage JSON-LD schema, SoftwareApplication schema, internal linking, unique content per page
+- **Sitemap**: `/sitemap.xml` — covers all 26 SEO pages
+
+#### 30-Day Launch Playbook
+- **Route**: `/launch-playbook` (HTML document, also `server/templates/launch-playbook.html`)
+- **Contents**: Week-by-week execution plan (Weeks 1–4) with ASO setup, paid ads (Meta/Google/TikTok), SEO indexing, review seeding, retention optimization, budget allocation ($1,350 total), targeting parameters for Meta/TikTok/Google, daily operational checklist, and KPI targets per week

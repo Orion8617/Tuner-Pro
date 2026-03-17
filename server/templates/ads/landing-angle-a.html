@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuitarTune — No Ads. Ever.</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { --cyan: #4AEDC4; --bg: #0A0A0A; --surface: #111; }
+  body { background: var(--bg); color: #fff; font-family: 'Arial Black', Arial, sans-serif; min-height: 100vh; }
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 24px 40px; border-bottom: 1px solid #1a1a1a; }
+  .logo { font-size: 22px; font-weight: 900; color: var(--cyan); letter-spacing: 2px; }
+  .nav-cta { background: var(--cyan); color: #0A0A0A; font-size: 15px; font-weight: 900; padding: 10px 24px; border-radius: 50px; text-decoration: none; text-transform: uppercase; letter-spacing: 1px; }
+  .hero { max-width: 900px; margin: 0 auto; padding: 80px 24px 60px; text-align: center; }
+  .pain-badge { display: inline-block; background: #1a0808; border: 1px solid #ff4444; color: #ff4444; font-size: 13px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; padding: 8px 20px; border-radius: 4px; margin-bottom: 36px; }
+  .hero h1 { font-size: clamp(38px, 6vw, 72px); font-weight: 900; line-height: 1.05; letter-spacing: -1px; margin-bottom: 28px; }
+  .hero h1 span { color: var(--cyan); }
+  .hero p { font-size: 20px; color: #888; font-weight: 600; line-height: 1.5; max-width: 600px; margin: 0 auto 48px; }
+  .cta-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 64px; }
+  .btn-primary { background: var(--cyan); color: #0A0A0A; font-size: 18px; font-weight: 900; padding: 18px 44px; border-radius: 50px; text-decoration: none; letter-spacing: 1px; text-transform: uppercase; }
+  .btn-secondary { background: transparent; color: #555; font-size: 16px; font-weight: 700; padding: 18px 32px; text-decoration: none; letter-spacing: 1px; }
+  .comparison { max-width: 800px; margin: 0 auto 80px; padding: 0 24px; }
+  .comp-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px; align-items: stretch; margin-bottom: 16px; }
+  .comp-card { border-radius: 12px; padding: 28px; }
+  .comp-them { background: #1a0a0a; border: 1px solid #2a1010; }
+  .comp-us { background: #0D1A17; border: 1px solid #1a3a2e; }
+  .comp-label { font-size: 12px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; }
+  .comp-label.bad { color: #ff4444; }
+  .comp-label.good { color: var(--cyan); }
+  .comp-text { font-size: 18px; font-weight: 700; color: #888; line-height: 1.4; }
+  .comp-text.good-text { color: #fff; }
+  .vs-col { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 900; color: #333; }
+  .features-section { max-width: 900px; margin: 0 auto 80px; padding: 0 24px; }
+  .section-title { font-size: 36px; font-weight: 900; text-align: center; margin-bottom: 48px; }
+  .section-title span { color: var(--cyan); }
+  .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+  .feature-card { background: var(--surface); border: 1px solid #1a1a1a; border-radius: 12px; padding: 28px; }
+  .feature-icon { font-size: 32px; margin-bottom: 16px; }
+  .feature-name { font-size: 18px; font-weight: 900; margin-bottom: 8px; }
+  .feature-desc { font-size: 14px; color: #666; font-weight: 600; line-height: 1.5; }
+  .final-cta { background: var(--surface); border-top: 1px solid #1a1a1a; padding: 80px 24px; text-align: center; }
+  .final-cta h2 { font-size: 48px; font-weight: 900; margin-bottom: 16px; }
+  .final-cta h2 span { color: var(--cyan); }
+  .final-cta p { font-size: 18px; color: #666; margin-bottom: 36px; }
+  footer { padding: 32px 40px; border-top: 1px solid #111; text-align: center; color: #333; font-size: 13px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+  <nav>
+    <div class="logo">GuitarTune</div>
+    <a href="#download" class="nav-cta">Download Free</a>
+  </nav>
+
+  <section class="hero">
+    <div class="pain-badge">The GuitarTuna Problem</div>
+    <h1>
+      They show ads<br>
+      while you're tuning.<br>
+      <span>We don't.</span>
+    </h1>
+    <p>GuitarTuna interrupts your tuning session every 30 seconds with full-screen ads. GuitarTune gives you the same accuracy — zero interruptions. Free.</p>
+    <div class="cta-group">
+      <a href="#download" class="btn-primary" id="download">Download Free</a>
+      <a href="#compare" class="btn-secondary">See the difference →</a>
+    </div>
+  </section>
+
+  <section class="comparison" id="compare">
+    <div class="comp-row">
+      <div class="comp-card comp-them">
+        <div class="comp-label bad">GuitarTuna</div>
+        <div class="comp-text">Ad every 30 seconds — even mid-tune</div>
+      </div>
+      <div class="vs-col">VS</div>
+      <div class="comp-card comp-us">
+        <div class="comp-label good">GuitarTune</div>
+        <div class="comp-text good-text">Zero ads. Tune uninterrupted, every time.</div>
+      </div>
+    </div>
+    <div class="comp-row">
+      <div class="comp-card comp-them">
+        <div class="comp-label bad">GuitarTuna Pro</div>
+        <div class="comp-text">$47.99/year to remove ads</div>
+      </div>
+      <div class="vs-col">VS</div>
+      <div class="comp-card comp-us">
+        <div class="comp-label good">GuitarTune Pro</div>
+        <div class="comp-text good-text">$9.99/year. Ad-free is the default.</div>
+      </div>
+    </div>
+    <div class="comp-row">
+      <div class="comp-card comp-them">
+        <div class="comp-label bad">GuitarTuna</div>
+        <div class="comp-text">Cluttered UI, upsells everywhere</div>
+      </div>
+      <div class="vs-col">VS</div>
+      <div class="comp-card comp-us">
+        <div class="comp-label good">GuitarTune</div>
+        <div class="comp-text good-text">One screen. Pick string. Tune. Done.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features-section">
+    <h2 class="section-title">Everything you <span>actually need</span></h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🎸</div>
+        <div class="feature-name">15 Tunings</div>
+        <div class="feature-desc">Standard, Drop D, Open G, DADGAD, Open D, Open E, Drop C, and more.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-name">Under 10 Seconds</div>
+        <div class="feature-desc">Real-time autocorrelation pitch detection. Hear a note, tune it.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🚫</div>
+        <div class="feature-name">Ad-Free Core</div>
+        <div class="feature-desc">The basic tuner is free. No ads. No time limits. No sign-up required.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌎</div>
+        <div class="feature-name">Bilingual</div>
+        <div class="feature-desc">Full English and Spanish support — auto-detected from your device.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="final-cta">
+    <h2>Try it <span>free</span>. No ads, no catch.</h2>
+    <p>Download GuitarTune and tune your first string in under 10 seconds.</p>
+    <a href="#" class="btn-primary">Download on App Store</a>
+  </section>
+
+  <footer>© 2026 GuitarTune · guitartune.app · No ads. Ever.</footer>
+</body>
+</html>
