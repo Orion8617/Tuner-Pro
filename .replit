@@ -77,3 +77,7 @@ ensurePreviewReachable = "/status"
 
 [userenv.shared]
 SOLANA_WALLET_ADDRESS = "HUAiWhbJiX8WQTZJ8m139RYdDHjhq9pfSm5yH54xAfEt"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
