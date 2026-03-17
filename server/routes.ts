@@ -1,7 +1,28 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import crypto from "node:crypto";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { storage } from "./storage";
+
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const LIFETIME_USDC = 14.99;
+
+function getSolanaConnection(): Connection {
+  const rpc = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+  return new Connection(rpc, "confirmed");
+}
+
+async function checkSolanaPaymentConfirmed(reference: string): Promise<boolean> {
+  try {
+    const connection = getSolanaConnection();
+    const refPubkey = new PublicKey(reference);
+    const signatures = await connection.getSignaturesForAddress(refPubkey, { limit: 1 });
+    return signatures.length > 0 && !signatures[0].err;
+  } catch (e) {
+    console.error("Solana check error:", e);
+    return false;
+  }
+}
 
 function verifyWebhookSignature(rawBody: Buffer, signature: string, secret: string): boolean {
   const hmac = crypto.createHmac("sha256", secret);
@@ -187,6 +208,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     return res.status(200).json({ received: true });
+  });
+
+  app.post("/api/checkout/solana/create", async (req: Request, res: Response) => {
+    const { userId, plan } = req.body;
+
+    if (!userId || plan !== "lifetime") {
+      return res.status(400).json({ error: "userId and plan=lifetime required" });
+    }
+
+    const recipientAddress = process.env.SOLANA_WALLET_ADDRESS;
+    if (!recipientAddress) {
+      return res.status(503).json({ error: "Solana payments not configured" });
+    }
+
+    try {
+      new PublicKey(recipientAddress);
+    } catch {
+      return res.status(500).json({ error: "Invalid SOLANA_WALLET_ADDRESS" });
+    }
+
+    const referenceKeypair = Keypair.generate();
+    const reference = referenceKeypair.publicKey.toBase58();
+
+    await storage.createSolanaSession({ userId, reference, amountUsdc: LIFETIME_USDC });
+
+    const params = new URLSearchParams({
+      "spl-token": USDC_MINT,
+      amount: String(LIFETIME_USDC),
+      reference,
+      label: "GuitarTune Pro",
+      message: "Lifetime Access",
+      memo: `lifetime-${userId}`,
+    });
+
+    const url = `solana:${recipientAddress}?${params.toString()}`;
+    const phantomUrl = `https://phantom.app/ul/v1/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent("https://guitartune.app")}`;
+
+    return res.json({ url, phantomUrl, reference });
+  });
+
+  app.get("/api/checkout/solana/verify", async (req: Request, res: Response) => {
+    const { reference, userId } = req.query as { reference: string; userId: string };
+
+    if (!reference || !userId) {
+      return res.status(400).json({ error: "reference and userId required" });
+    }
+
+    const session = await storage.getSolanaSession(reference);
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    if (session.userId !== userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (new Date() > new Date(session.expiresAt)) {
+      return res.json({ status: "expired" });
+    }
+
+    if (session.status === "confirmed") {
+      return res.json({ status: "confirmed" });
+    }
+
+    const confirmed = await checkSolanaPaymentConfirmed(reference);
+
+    if (confirmed) {
+      await storage.confirmSolanaSession(reference);
+      await storage.upsertSubscription({
+        userId,
+        lemonSqueezyId: `solana-${reference}`,
+        orderId: reference,
+        plan: "lifetime",
+        status: "active",
+        currentPeriodEnd: new Date("2099-12-31").toISOString(),
+      });
+      console.log(`Solana Lifetime purchase confirmed for user ${userId}`);
+      return res.json({ status: "confirmed" });
+    }
+
+    return res.json({ status: "pending" });
   });
 
   const httpServer = createServer(app);

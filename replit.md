@@ -53,6 +53,17 @@ Preferred communication style: Simple, everyday language.
 - `findClosestString` accepts optional tuning parameter (defaults to STANDARD_TUNING)
 - Haptic feedback (vibration) triggers when within ±5 cents of target frequency
 
+### Pricing & Payment (LemonSqueezy + Solana Pay)
+
+#### Solana Pay (Phantom wallet — crypto option)
+- Lifetime Access: **14.99 USDC** on Solana mainnet
+- **Payment flow**: User selects Lifetime plan → taps "Pay with Phantom" → backend generates Solana Pay URL with unique reference key + USDC mint → app opens URL (Phantom deep link on Android, browser fallback) → user confirms in Phantom → backend polls `getSignaturesForAddress(reference)` every 3s for up to 2 min → on confirmation activates lifetime subscription
+- **Endpoints**: `POST /api/checkout/solana/create` (generates URL + session), `GET /api/checkout/solana/verify` (checks blockchain)
+- **Required env var**: `SOLANA_WALLET_ADDRESS` — your Phantom/Solana wallet address to receive payments
+- **Optional env var**: `SOLANA_RPC_URL` — defaults to `https://api.mainnet-beta.solana.com`
+- **USDC mint** (Solana mainnet): `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
+- **Frontend**: Purple (#9945FF) Phantom button visible only on Lifetime plan tab; polls backend after redirecting to wallet
+
 ### Pricing & Payment (LemonSqueezy)
 - Monthly: $1.99/month
 - Annual: $9.99/year (58% savings)

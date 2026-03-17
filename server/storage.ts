@@ -6,11 +6,22 @@ export interface Subscription {
   userId: string;
   lemonSqueezyId: string;
   orderId: string;
-  plan: "monthly" | "annual";
+  plan: "monthly" | "annual" | "lifetime";
   status: "active" | "cancelled" | "expired" | "paused";
   currentPeriodEnd: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SolanaPaySession {
+  id: string;
+  userId: string;
+  reference: string;
+  plan: "lifetime";
+  amountUsdc: number;
+  status: "pending" | "confirmed" | "expired";
+  createdAt: string;
+  expiresAt: string;
 }
 
 export interface IStorage {
@@ -21,15 +32,20 @@ export interface IStorage {
   getSubscriptionByLemonSqueezyId(lsId: string): Promise<Subscription | undefined>;
   upsertSubscription(sub: Omit<Subscription, "id" | "createdAt" | "updatedAt">): Promise<Subscription>;
   updateSubscriptionStatus(lemonSqueezyId: string, status: Subscription["status"]): Promise<void>;
+  createSolanaSession(data: { userId: string; reference: string; amountUsdc: number }): Promise<SolanaPaySession>;
+  getSolanaSession(reference: string): Promise<SolanaPaySession | undefined>;
+  confirmSolanaSession(reference: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private subscriptions: Map<string, Subscription>;
+  private solanaSessions: Map<string, SolanaPaySession>;
 
   constructor() {
     this.users = new Map();
     this.subscriptions = new Map();
+    this.solanaSessions = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -92,6 +108,36 @@ export class MemStorage implements IStorage {
       sub.status = status;
       sub.updatedAt = new Date().toISOString();
       this.subscriptions.set(sub.id, sub);
+    }
+  }
+
+  async createSolanaSession(data: { userId: string; reference: string; amountUsdc: number }): Promise<SolanaPaySession> {
+    const id = randomUUID();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30 * 60 * 1000);
+    const session: SolanaPaySession = {
+      id,
+      userId: data.userId,
+      reference: data.reference,
+      plan: "lifetime",
+      amountUsdc: data.amountUsdc,
+      status: "pending",
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    };
+    this.solanaSessions.set(data.reference, session);
+    return session;
+  }
+
+  async getSolanaSession(reference: string): Promise<SolanaPaySession | undefined> {
+    return this.solanaSessions.get(reference);
+  }
+
+  async confirmSolanaSession(reference: string): Promise<void> {
+    const session = this.solanaSessions.get(reference);
+    if (session) {
+      session.status = "confirmed";
+      this.solanaSessions.set(reference, session);
     }
   }
 }

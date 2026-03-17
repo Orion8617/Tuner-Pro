@@ -1,5 +1,5 @@
-import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Alert, ActivityIndicator } from "react-native";
-import { useState, useCallback } from "react";
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Alert, ActivityIndicator, Linking } from "react-native";
+import { useState, useCallback, useRef } from "react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -57,6 +57,8 @@ export default function PremiumScreen() {
   const { user, upgradeToPremium, checkSubscriptionStatus } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual" | "lifetime">("annual");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSolanaProcessing, setIsSolanaProcessing] = useState(false);
+  const solanaPollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handlePurchase = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -140,6 +142,92 @@ export default function PremiumScreen() {
       }
     }
   }, [user, selectedPlan, checkSubscriptionStatus, upgradeToPremium]);
+
+  const handlePhantomPay = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (!user) {
+      if (Platform.OS === "web") {
+        alert(t("premium.loginRequired"));
+      } else {
+        Alert.alert("", t("premium.loginRequired"));
+      }
+      router.push("/(auth)/login");
+      return;
+    }
+
+    setIsSolanaProcessing(true);
+
+    try {
+      const res = await apiRequest("POST", "/api/checkout/solana/create", {
+        userId: user.id,
+        plan: "lifetime",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Solana payment not configured");
+      }
+
+      const { url, phantomUrl, reference } = data as { url: string; phantomUrl: string; reference: string };
+
+      const canOpenPhantom = await Linking.canOpenURL("phantom://");
+      const openUrl = canOpenPhantom ? url : phantomUrl;
+
+      await Linking.openURL(openUrl);
+
+      let attempts = 0;
+      const maxAttempts = 40;
+
+      const pollPayment = async () => {
+        try {
+          const verifyRes = await apiRequest(
+            "GET",
+            `/api/checkout/solana/verify?reference=${encodeURIComponent(reference)}&userId=${encodeURIComponent(user.id)}`
+          );
+          const verifyData = await verifyRes.json() as { status: string };
+
+          if (verifyData.status === "confirmed") {
+            await checkSubscriptionStatus();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setIsSolanaProcessing(false);
+            router.back();
+            return;
+          }
+
+          if (verifyData.status === "expired") {
+            setIsSolanaProcessing(false);
+            if (Platform.OS === "web") {
+              alert(t("premium.phantomExpired"));
+            } else {
+              Alert.alert("", t("premium.phantomExpired"));
+            }
+            return;
+          }
+        } catch (err) {
+          console.warn("Solana verify poll error:", err);
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          solanaPollingRef.current = setTimeout(pollPayment, 3000);
+        } else {
+          setIsSolanaProcessing(false);
+        }
+      };
+
+      setTimeout(pollPayment, 4000);
+    } catch (e: unknown) {
+      console.error("Phantom pay error:", e);
+      setIsSolanaProcessing(false);
+      const msg = e instanceof Error ? e.message : t("premium.error");
+      if (Platform.OS === "web") {
+        alert(msg);
+      } else {
+        Alert.alert("", msg);
+      }
+    }
+  }, [user, checkSubscriptionStatus]);
 
   return (
     <View style={[styles.container, { paddingTop: Platform.OS === "web" ? 67 : 0 }]}>
@@ -337,6 +425,40 @@ export default function PremiumScreen() {
               )}
             </LinearGradient>
           </Pressable>
+        )}
+
+        {selectedPlan === "lifetime" && !user?.isPremium && (
+          <>
+            <Text style={styles.orSeparator}>{t("premium.orPayWith")}</Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.phantomButton,
+                pressed && styles.phantomButtonPressed,
+                isSolanaProcessing && styles.phantomButtonDisabled,
+              ]}
+              onPress={handlePhantomPay}
+              disabled={isSolanaProcessing || isProcessing}
+            >
+              {isSolanaProcessing ? (
+                <View style={styles.phantomButtonInner}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.phantomButtonText}>{t("premium.phantomWaiting")}</Text>
+                </View>
+              ) : (
+                <View style={styles.phantomButtonInner}>
+                  <View style={styles.phantomIconBox}>
+                    <Text style={styles.phantomIconText}>👻</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.phantomButtonText}>{t("premium.phantomPay")}</Text>
+                    <Text style={styles.phantomButtonSubtext}>{t("premium.phantomPayDesc")}</Text>
+                  </View>
+                </View>
+              )}
+            </Pressable>
+            <Text style={styles.phantomHint}>{t("premium.phantomInstallHint")}</Text>
+          </>
         )}
 
         <Text style={styles.disclaimer}>
@@ -644,5 +766,58 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700" as const,
     color: Colors.dark.premium,
+  },
+  orSeparator: {
+    fontSize: 12,
+    color: Colors.dark.textTertiary,
+    textAlign: "center",
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  phantomButton: {
+    borderRadius: 16,
+    backgroundColor: "#9945FF",
+    overflow: "hidden",
+  },
+  phantomButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  phantomButtonDisabled: {
+    opacity: 0.6,
+  },
+  phantomButtonInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    justifyContent: "center",
+  },
+  phantomIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  phantomIconText: {
+    fontSize: 20,
+  },
+  phantomButtonText: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: "#fff",
+  },
+  phantomButtonSubtext: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 2,
+  },
+  phantomHint: {
+    fontSize: 11,
+    color: Colors.dark.textTertiary,
+    textAlign: "center",
+    marginTop: 8,
   },
 });
