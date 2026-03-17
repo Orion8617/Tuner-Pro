@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tuner Pro</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🎸 Tuner Pro</h1>
+      <p class="subtitle">Professional Chromatic Tuner</p>
+    </header>
+
+    <main>
+      <div class="tuner-display">
+        <div class="note-display">
+          <span id="note-name">–</span>
+          <span id="octave"></span>
+        </div>
+        <div class="frequency-display">
+          <span id="frequency">– Hz</span>
+        </div>
+
+        <div class="meter">
+          <div class="meter-scale">
+            <span class="label-flat">♭</span>
+            <span class="label-in-tune">♩</span>
+            <span class="label-sharp">♯</span>
+          </div>
+          <div class="meter-bar">
+            <div class="meter-center"></div>
+            <div id="meter-needle" class="meter-needle"></div>
+          </div>
+          <div class="meter-ticks">
+            <span>-50</span><span>-25</span><span>0</span><span>+25</span><span>+50</span>
+          </div>
+        </div>
+
+        <div id="tuning-status" class="tuning-status">
+          Press <em>Start</em> and play a note
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="start-btn" class="btn btn-primary">▶ Start</button>
+        <button id="stop-btn" class="btn btn-secondary" disabled>■ Stop</button>
+      </div>
+
+      <div class="presets">
+        <h2>Guitar Tunings</h2>
+        <div class="preset-grid">
+          <button class="preset-btn active" data-tuning="standard">Standard (EADGBE)</button>
+          <button class="preset-btn" data-tuning="dropD">Drop D (DADGBE)</button>
+          <button class="preset-btn" data-tuning="openG">Open G (DGDGBD)</button>
+          <button class="preset-btn" data-tuning="halfDown">Half Step Down (Eb)</button>
+          <button class="preset-btn" data-tuning="fullDown">Full Step Down (D)</button>
+          <button class="preset-btn" data-tuning="openE">Open E (EBEG#BE)</button>
+        </div>
+        <div id="tuning-notes" class="tuning-notes"></div>
+      </div>
+
+      <div class="reference">
+        <label for="reference-pitch">Reference Pitch:</label>
+        <input type="range" id="reference-pitch" min="430" max="450" value="440" step="1" />
+        <span id="reference-pitch-value">440 Hz</span>
+      </div>
+    </main>
+
+    <footer>
+      <p>Tuner Pro &copy; 2025 &mdash; Use headphones for best results</p>
+    </footer>
+  </div>
+
+  <script src="tuner.js"></script>
+</body>
+</html>

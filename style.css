@@ -1,0 +1,263 @@
+/* ── Reset & base ────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f0f1a;
+  --card: #1a1a2e;
+  --accent: #e94560;
+  --accent2: #0f3460;
+  --text: #eaeaea;
+  --muted: #888;
+  --flat: #4fc3f7;
+  --sharp: #ef5350;
+  --in-tune: #66bb6a;
+  --radius: 12px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 1.5rem 1rem 3rem;
+}
+
+/* ── App shell ───────────────────────────────────── */
+.app {
+  width: 100%;
+  max-width: 520px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+header h1 {
+  font-size: 2.2rem;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: .9rem;
+  margin-top: .2rem;
+}
+
+/* ── Tuner display card ──────────────────────────── */
+.tuner-display {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  margin-bottom: 1.2rem;
+  box-shadow: 0 4px 30px rgba(0,0,0,.4);
+}
+
+.note-display {
+  font-size: 5rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: .3rem;
+}
+
+#note-name {
+  color: var(--accent);
+}
+
+#octave {
+  font-size: 2rem;
+  color: var(--muted);
+  vertical-align: super;
+}
+
+.frequency-display {
+  font-size: 1.1rem;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+
+/* ── Meter ───────────────────────────────────────── */
+.meter {
+  position: relative;
+  margin: 0 auto 1rem;
+  max-width: 380px;
+}
+
+.meter-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.1rem;
+  margin-bottom: .3rem;
+}
+
+.label-flat  { color: var(--flat);    font-size: 1.3rem; }
+.label-in-tune { color: var(--in-tune); }
+.label-sharp { color: var(--sharp);   font-size: 1.3rem; }
+
+.meter-bar {
+  position: relative;
+  height: 24px;
+  background: linear-gradient(to right, var(--flat) 0%, var(--card) 40%, var(--in-tune) 50%, var(--card) 60%, var(--sharp) 100%);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+.meter-center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255,255,255,.35);
+  transform: translateX(-50%);
+}
+
+.meter-needle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 2px;
+  background: #fff;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: left .08s linear;
+  box-shadow: 0 0 8px rgba(255,255,255,.7);
+}
+
+.meter-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: .7rem;
+  color: var(--muted);
+  margin-top: .3rem;
+}
+
+/* ── Status ──────────────────────────────────────── */
+.tuning-status {
+  font-size: 1rem;
+  color: var(--muted);
+  margin-top: .8rem;
+  min-height: 1.5em;
+  transition: color .2s;
+}
+
+.tuning-status.in-tune  { color: var(--in-tune); font-weight: 600; }
+.tuning-status.flat     { color: var(--flat);    font-weight: 600; }
+.tuning-status.sharp    { color: var(--sharp);   font-weight: 600; }
+
+/* ── Buttons ─────────────────────────────────────── */
+.controls {
+  display: flex;
+  gap: .8rem;
+  justify-content: center;
+  margin-bottom: 1.4rem;
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: .75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .4; cursor: default; }
+
+.btn-primary   { background: var(--accent); color: #fff; }
+.btn-secondary { background: var(--accent2); color: #fff; }
+
+/* ── Presets ─────────────────────────────────────── */
+.presets {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+
+.presets h2 {
+  font-size: 1rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: .8rem;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+}
+
+.preset-btn {
+  background: var(--accent2);
+  color: var(--text);
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  padding: .55rem .6rem;
+  font-size: .82rem;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.preset-btn:hover  { background: #1a4a80; }
+.preset-btn.active { background: var(--accent); border-color: var(--accent); }
+
+.tuning-notes {
+  display: flex;
+  justify-content: center;
+  gap: .5rem;
+  margin-top: .9rem;
+  flex-wrap: wrap;
+}
+
+.string-badge {
+  background: #252540;
+  border-radius: 20px;
+  padding: .3rem .75rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid #333;
+}
+
+/* ── Reference pitch ─────────────────────────────── */
+.reference {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 1rem 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  font-size: .9rem;
+  color: var(--muted);
+}
+
+#reference-pitch {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+#reference-pitch-value {
+  min-width: 55px;
+  text-align: right;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ── Footer ──────────────────────────────────────── */
+footer {
+  text-align: center;
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: .8rem;
+}
