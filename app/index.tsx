@@ -274,6 +274,7 @@ export default function TunerScreen() {
   const wasInTuneRef = useRef(false);
   const stabilizerRef = useRef(new FrequencyStabilizer());
   const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentTuningRef = useRef<TuningConfig>(ALL_TUNINGS[0]);
 
   const micPulseOpacity = useSharedValue(0);
   const micButtonScale = useSharedValue(1);
@@ -345,7 +346,7 @@ export default function TunerScreen() {
   const handleNativePitch = useCallback((data: { frequency: number; note: string; octave: number; cents: number }) => {
     if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
     const freq = data.frequency;
-    const closest = findClosestString(freq, currentTuning.strings);
+    const closest = findClosestString(freq, currentTuningRef.current.strings);
     setDetectedFrequency(freq);
     setDetectedNote(data.note);
     setDetectedOctave(data.octave);
@@ -357,7 +358,7 @@ export default function TunerScreen() {
     } else {
       setCents(data.cents);
     }
-  }, [currentTuning]);
+  }, []);
 
   const handleNativeSilence = useCallback(() => {
     if (!silenceTimeoutRef.current) {
@@ -425,7 +426,7 @@ export default function TunerScreen() {
       if (stableFrequency !== null && stableFrequency > 50 && stableFrequency < 500) {
         if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
         const noteInfo = frequencyToNote(stableFrequency);
-        const closest = findClosestString(stableFrequency, currentTuning.strings);
+        const closest = findClosestString(stableFrequency, currentTuningRef.current.strings);
         setDetectedFrequency(stableFrequency);
         setDetectedNote(noteInfo.note);
         setDetectedOctave(noteInfo.octave);
@@ -458,6 +459,7 @@ export default function TunerScreen() {
   }
 
   function handleTuningSelect(tuning: TuningConfig) {
+    currentTuningRef.current = tuning;
     setCurrentTuning(tuning);
     setDetectedString(null); setDetectedNote(null); setDetectedOctave(null);
     setDetectedFrequency(0); setCents(0); setTunedStrings(new Set());

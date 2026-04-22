@@ -80,6 +80,49 @@ function showAlert(title: string, msg: string) {
   else Alert.alert(title, msg);
 }
 
+function PlanCard({
+  plan,
+  isSelected,
+  onSelect,
+}: {
+  plan: { key: Plan; label: string; price: string; period: string; badge?: string; badgeColor?: string; saveBadge?: string };
+  isSelected: boolean;
+  onSelect: (key: Plan) => void;
+}) {
+  const badgeIsAccent = plan.badgeColor === ACCENT;
+  const badgeIsGold   = plan.badgeColor === GOLD;
+  const badgeBg       = badgeIsAccent ? ACCENT_MED : badgeIsGold ? GOLD_DIM : "rgba(123,63,228,0.2)";
+  const badgeBorder   = badgeIsAccent ? "rgba(74,237,196,0.3)" : badgeIsGold ? "rgba(232,197,71,0.3)" : "rgba(123,63,228,0.35)";
+  const saveBg        = badgeIsAccent ? ACCENT_DIM : badgeIsGold ? GOLD_DIM : "rgba(123,63,228,0.15)";
+
+  return (
+    <Pressable
+      key={plan.key}
+      style={[styles.planCard, isSelected && styles.planCardSelected]}
+      onPress={() => { onSelect(plan.key); Haptics.selectionAsync(); }}
+    >
+      {plan.badge && (
+        <View style={[styles.planBadge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+          <Text style={[styles.planBadgeText, { color: plan.badgeColor }]}>{plan.badge}</Text>
+        </View>
+      )}
+      {isSelected && (
+        <View style={styles.selectedDot}>
+          <Ionicons name="checkmark-circle" size={14} color={ACCENT} />
+        </View>
+      )}
+      <Text style={[styles.planLabel, isSelected && styles.planLabelSelected]}>{plan.label}</Text>
+      <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>{plan.price}</Text>
+      <Text style={[styles.planPeriod, isSelected && styles.planPeriodSelected]}>{plan.period}</Text>
+      {plan.saveBadge && (
+        <View style={[styles.savePill, { backgroundColor: saveBg }]}>
+          <Text style={[styles.savePillText, { color: plan.badgeColor }]}>{plan.saveBadge}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
   const { user, upgradeToPremium, checkSubscriptionStatus } = useAuth();
@@ -302,74 +345,24 @@ export default function PremiumScreen() {
         {/* ===== PLAN CARDS — 2×2 grid ===== */}
         <View style={styles.planGrid}>
           <View style={styles.planRow}>
-            {plans.slice(0, 2).map((plan) => {
-              const isSelected = selectedPlan === plan.key;
-              const badgeIsAccent = plan.badgeColor === ACCENT;
-              const badgeIsGold = plan.badgeColor === GOLD;
-              const badgeBg = badgeIsAccent ? ACCENT_MED : badgeIsGold ? GOLD_DIM : "rgba(123,63,228,0.2)";
-              const badgeBorder = badgeIsAccent ? "rgba(74,237,196,0.3)" : badgeIsGold ? "rgba(232,197,71,0.3)" : "rgba(123,63,228,0.35)";
-              return (
-                <Pressable
-                  key={plan.key}
-                  style={[styles.planCard, isSelected && styles.planCardSelected]}
-                  onPress={() => { setSelectedPlan(plan.key); Haptics.selectionAsync(); }}
-                >
-                  {plan.badge && (
-                    <View style={[styles.planBadge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
-                      <Text style={[styles.planBadgeText, { color: plan.badgeColor }]}>{plan.badge}</Text>
-                    </View>
-                  )}
-                  {isSelected && (
-                    <View style={styles.selectedDot}>
-                      <Ionicons name="checkmark-circle" size={14} color={ACCENT} />
-                    </View>
-                  )}
-                  <Text style={[styles.planLabel, isSelected && styles.planLabelSelected]}>{plan.label}</Text>
-                  <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>{plan.price}</Text>
-                  <Text style={[styles.planPeriod, isSelected && styles.planPeriodSelected]}>{plan.period}</Text>
-                  {plan.saveBadge && (
-                    <View style={[styles.savePill, { backgroundColor: badgeIsAccent ? ACCENT_DIM : badgeIsGold ? GOLD_DIM : "rgba(123,63,228,0.15)" }]}>
-                      <Text style={[styles.savePillText, { color: plan.badgeColor }]}>{plan.saveBadge}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
+            {plans.slice(0, 2).map((plan) => (
+              <PlanCard
+                key={plan.key}
+                plan={plan}
+                isSelected={selectedPlan === plan.key}
+                onSelect={setSelectedPlan}
+              />
+            ))}
           </View>
           <View style={styles.planRow}>
-            {plans.slice(2, 4).map((plan) => {
-              const isSelected = selectedPlan === plan.key;
-              const badgeIsAccent = plan.badgeColor === ACCENT;
-              const badgeIsGold = plan.badgeColor === GOLD;
-              const badgeBg = badgeIsAccent ? ACCENT_MED : badgeIsGold ? GOLD_DIM : "rgba(123,63,228,0.2)";
-              const badgeBorder = badgeIsAccent ? "rgba(74,237,196,0.3)" : badgeIsGold ? "rgba(232,197,71,0.3)" : "rgba(123,63,228,0.35)";
-              return (
-                <Pressable
-                  key={plan.key}
-                  style={[styles.planCard, isSelected && styles.planCardSelected]}
-                  onPress={() => { setSelectedPlan(plan.key); Haptics.selectionAsync(); }}
-                >
-                  {plan.badge && (
-                    <View style={[styles.planBadge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
-                      <Text style={[styles.planBadgeText, { color: plan.badgeColor }]}>{plan.badge}</Text>
-                    </View>
-                  )}
-                  {isSelected && (
-                    <View style={styles.selectedDot}>
-                      <Ionicons name="checkmark-circle" size={14} color={ACCENT} />
-                    </View>
-                  )}
-                  <Text style={[styles.planLabel, isSelected && styles.planLabelSelected]}>{plan.label}</Text>
-                  <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>{plan.price}</Text>
-                  <Text style={[styles.planPeriod, isSelected && styles.planPeriodSelected]}>{plan.period}</Text>
-                  {plan.saveBadge && (
-                    <View style={[styles.savePill, { backgroundColor: badgeIsAccent ? ACCENT_DIM : badgeIsGold ? GOLD_DIM : "rgba(123,63,228,0.15)" }]}>
-                      <Text style={[styles.savePillText, { color: plan.badgeColor }]}>{plan.saveBadge}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
+            {plans.slice(2, 4).map((plan) => (
+              <PlanCard
+                key={plan.key}
+                plan={plan}
+                isSelected={selectedPlan === plan.key}
+                onSelect={setSelectedPlan}
+              />
+            ))}
           </View>
         </View>
 

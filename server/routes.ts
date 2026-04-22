@@ -11,9 +11,14 @@ const PLAN_PRICES = {
   lifetime:  { usdc: 14.99, sol: parseFloat(process.env.SOLANA_LIFETIME_SOL || "0.10") },
 };
 
+let _solanaConnection: Connection | null = null;
+
 function getSolanaConnection(): Connection {
-  const rpc = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
-  return new Connection(rpc, "confirmed");
+  if (!_solanaConnection) {
+    const rpc = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+    _solanaConnection = new Connection(rpc, "confirmed");
+  }
+  return _solanaConnection;
 }
 
 async function checkSolanaPaymentConfirmed(reference: string): Promise<boolean> {
