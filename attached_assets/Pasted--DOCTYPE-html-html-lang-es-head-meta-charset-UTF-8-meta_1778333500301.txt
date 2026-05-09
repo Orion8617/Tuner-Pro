@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KlonOS Master Rail | Private Cloud 5.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap');
+        body { margin: 0; background-color: #010204; color: #a26bff; font-family: 'Fira Code', monospace; overflow: hidden; display: flex; flex-direction: column; height: 100vh;}
+        
+        /* ─── Layout & Panels ─── */
+        #top-bar { height: 60px; background: rgba(1, 2, 4, 0.95); border-bottom: 1px solid #0055ff; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; z-index: 10; box-shadow: 0 5px 20px rgba(0,85,255,0.2);}
+        #main-content { display: flex; flex: 1; overflow: hidden; position: relative; }
+        
+        .panel { background: rgba(0, 0, 0, 0.85); padding: 15px; display: flex; flex-direction: column; z-index: 10; backdrop-filter: blur(5px); overflow-y: auto;}
+        #left-panel { width: 330px; border-right: 1px solid #0055ff; box-shadow: 10px 0 20px rgba(0,0,0,0.8); }
+        #right-panel { width: 380px; border-left: 1px solid #ff00ff; box-shadow: -10px 0 20px rgba(0,0,0,0.8); }
+        #center-view { flex: 1; position: relative; background: radial-gradient(circle at center, #050a14 0%, #000 100%);}
+        
+        /* ─── Typography & UI Elements ─── */
+        h1 { margin: 0; color: #0088ff; text-shadow: 0 0 10px rgba(0,136,255,0.5); font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px;}
+        h2 { font-size: 0.75rem; color: #a26bff; text-transform: uppercase; border-bottom: 1px solid #330066; padding-bottom: 4px; margin-bottom: 10px; margin-top: 15px; letter-spacing: 1px;}
+        h2:first-child { margin-top: 0; }
+        
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.8rem; align-items: center;}
+        .stat-label { color: #5588cc; }
+        .stat-value { color: #00ffff; font-weight: bold; }
+        
+        .modulator-bar { height: 4px; background: #112244; border-radius: 2px; overflow: hidden; margin-top: 2px; }
+        .modulator-fill { height: 100%; transition: width 0.1s linear; }
+        .dopamine { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
+        .serotonin { background: #ff00ff; box-shadow: 0 0 8px #ff00ff; }
+        .acetylcholine { background: #ffff00; box-shadow: 0 0 8px #ffff00; }
+        .norepinephrine { background: #ff3300; box-shadow: 0 0 8px #ff3300; }
+        
+        .reward-log { font-size: 0.7rem; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #ff00ff; background: rgba(255,0,255,0.05); padding-top: 4px; padding-bottom: 4px;}
+        .reward-positive { color: #00ffcc; }
+        .reward-negative { color: #ff3344; }
+        
+        .math-block { font-family: 'Times New Roman', serif; font-style: italic; font-size: 0.75rem; color: #00ffff; background: rgba(0,17,34,0.5); padding: 8px; border-radius: 4px; border: 1px solid #0055aa; text-align: left; line-height: 1.4; margin-bottom: 8px;}
+        .math-highlight { color: #ff00ff; font-weight: bold; }
+        
+        .heartbeat { animation: heartbeat 1s infinite; }
+        @keyframes heartbeat { 0% { transform: scale(1); } 15% { transform: scale(1.05); } 30% { transform: scale(1); } 100% { transform: scale(1); } }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #0055ff; border-radius: 2px;}
+        
+        .scanlines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 4px, 3px 100%; }
+        #webgl-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="top-bar">
+        <div>
+            <h1>KlonOS Master Rail Configurator</h1>
+            <div class="text-[10px] text-gray-400 mt-1">Trident Engine HPC | Private Cloud 5.0 | Six Sigma Architecture</div>
+        </div>
+        <div class="flex gap-6">
+            <div class="text-right">
+                <div class="text-[9px] text-blue-500 uppercase font-bold">Ring 0 Bridge</div>
+                <div class="text-sm font-bold text-green-400" id="bus-status">DMA_ACTIVE</div>
+            </div>
+            <div class="text-right">
+                <div class="text-[9px] text-magenta-500 uppercase font-bold">System Tick</div>
+                <div class="text-sm font-bold text-magenta-400" id="tick-rate">0 Hz</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <div id="left-panel" class="panel">
+            <h2>Neural Telemetry (SNN)</h2>
+            <div class="stat-row"><span class="stat-label">Spike Count:</span> <span class="stat-value" id="tel-spikes">0</span></div>
+            <div class="stat-row"><span class="stat-label">System Entropy:</span> <span class="stat-value text-yellow-400" id="tel-ent">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Signal Coherence:</span> <span class="stat-value text-green-400" id="tel-coh">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Burst Frequency:</span> <span class="stat-value" id="tel-burst">0.0 Hz</span></div>
+            <div class="stat-row"><span class="stat-label">GABA Inhibition:</span> <span class="stat-value text-red-400" id="tel-gaba">1.00</span></div>
+
+            <h2>Neuromodulators (Endocrine)</h2>
+            <div class="mt-1">
+                <div class="stat-row mb-0"><span class="stat-label">Dopamine</span> <span class="stat-value" id="val-dop">0.50</span></div>
+                <div class="modulator-bar"><div class="modulator-fill dopamine" id="bar-dop" style="width: 50%;"></div></div>
+            </div>
+            <div class="mt-2">
+                <div class="stat-row mb-0"><span class="stat-label">Serotonin</span> <span class="stat-value" id="val-ser">0.50</span></div>
+                <div class="modulator-bar"><div class="modulator-fill serotonin" id="bar-ser" style="width: 50%;"></div></div>
+            </div>
+            <div class="mt-2">
+                <div class="stat-row mb-0"><span class="stat-label">Acetylcholine</span> <span class="stat-value" id="val-ace">0.50</span></div>
+                <div class="modulator-bar"><div class="modulator-fill acetylcholine" id="bar-ace" style="width: 50%;"></div></div>
+            </div>
+            <div class="mt-2">
+                <div class="stat-row mb-0"><span class="stat-label">Norepinephrine</span> <span class="stat-value" id="val-nor">0.30</span></div>
+                <div class="modulator-bar"><div class="modulator-fill norepinephrine" id="bar-nor" style="width: 30%;"></div></div>
+            </div>
+
+            <h2 class="mt-4 text-orange-400">Environmental (NEAT)</h2>
+            <div class="math-block" style="border-color: #aa5500; color: #ffaa00; font-size: 0.65rem;">
+                b<sub class="text-[8px]">th</sub> = clip((temp-32)/88·100, 0, 100)<br>
+                b<sub class="text-[8px]">mo</sub> = clip(hum·(1+rain·0.05), 0, 100)<br>
+                <span class="math-highlight text-white">neat = clip(round(Σ w<sub class="text-[8px]">i</sub>·b<sub class="text-[8px]">i</sub>), 0, 100)</span>
+            </div>
+            <div class="stat-row"><span class="stat-label">Thermal (b_th):</span> <span class="stat-value text-red-500" id="env-bthermal">0.00%</span></div>
+            <div class="stat-row"><span class="stat-label">Moisture (b_mo):</span> <span class="stat-value text-cyan-400" id="env-bmoisture">0.00%</span></div>
+            <div class="stat-row"><span class="stat-label">Kinetic (b_ki):</span> <span class="stat-value text-yellow-400" id="env-bkinetic">0.00%</span></div>
+            <div class="stat-row"><span class="stat-label">Pressure (b_pr):</span> <span class="stat-value text-purple-400" id="env-bpressure">0.00%</span></div>
+            
+            <div class="border-t border-gray-800 my-2"></div>
+            <div class="stat-row">
+                <span class="stat-label text-white uppercase tracking-widest font-bold">NEAT Index:</span> 
+                <span class="stat-value text-green-400" id="env-neat" style="font-size: 1.3rem;">0%</span>
+            </div>
+        </div>
+
+        <div id="center-view">
+            <div class="scanlines"></div>
+            <div id="webgl-canvas"></div>
+            <div class="absolute bottom-4 left-4 text-[9px] text-cyan-700 uppercase tracking-widest bg-black bg-opacity-70 px-3 py-2 rounded border border-cyan-900">
+                [TRIDENT] Master Rail Axon Visualization
+            </div>
+        </div>
+
+        <div id="right-panel" class="panel">
+            <h2>Auto-Reward Routing</h2>
+            <div class="stat-row mb-2">
+                <span class="stat-label">Global Target Signal:</span> 
+                <span class="stat-value" id="reward-signal" style="font-size: 1.2rem;">0.00</span>
+            </div>
+            <div id="reward-log-container" class="flex flex-col gap-1 pr-2 max-h-[80px] overflow-y-hidden mb-2"></div>
+
+            <h2 class="mt-2 text-cyan-400">Robust 2-Pass LM Engine</h2>
+            <div class="math-block">
+                <span class="text-gray-400">// Pass 1: RANSAC/MAD O(N log N)</span><br>
+                Keep AP<sub class="text-[8px]">i</sub> if |‖p̂-p<sub class="text-[8px]">i</sub>‖ - R<sub class="text-[8px]">i</sub>| ≤ max(3·median, 20m)<br>
+                <span class="text-gray-400">// Pass 2: Bilateral Error Coupling (κ=0.3)</span><br>
+                <span class="text-gray-400">// Pass 3: GDOP & Geometry Classification O(1)</span><br>
+            </div>
+            
+            <div class="stat-row"><span class="stat-label">Active Sensors (N):</span> <span class="stat-value text-white" id="lm-sensors">6 / 6</span></div>
+            <div class="stat-row"><span class="stat-label">Median Resid (MAD):</span> <span class="stat-value text-yellow-400" id="lm-mad">0.00m</span></div>
+            <div class="stat-row"><span class="stat-label">Outliers Culled:</span> <span class="stat-value text-red-500" id="lm-culled">0</span></div>
+            
+            <div class="border-t border-gray-800 my-1"></div>
+            
+            <div class="stat-row"><span class="stat-label">True Origin [X,Y]:</span> <span class="stat-value text-magenta-400" id="lm-coord">[0.00, 0.00]</span></div>
+            <div class="stat-row"><span class="stat-label">Convergence ‖Δp‖:</span> <span class="stat-value text-green-400" id="lm-norm">0.000m</span></div>
+            <div class="stat-row"><span class="stat-label">GDOP (Geometry):</span> <span class="stat-value" id="lm-gdop">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Topology O(1):</span> <span class="stat-value" id="lm-topo">--</span></div>
+            <div class="stat-row"><span class="stat-label">Total Iters/Passes:</span> <span class="stat-value" id="lm-iters">0</span></div>
+
+            <h2 class="mt-4 text-purple-400">Maya Base-20 Quantization</h2>
+            <div class="math-block" style="border-color: #5500aa; color: #cc88ff;">
+                level = clip(floor(norm·20), 0, 19)<br>
+                <span class="text-gray-400">// 6.4× compression (64-bit float → 10-bit total)</span>
+            </div>
+            <div class="stat-row"><span class="stat-label">Quantized [X,Y]:</span> <span class="stat-value text-white" id="maya-level">[--, --]</span></div>
+            <div class="stat-row"><span class="stat-label">Dequantized [X,Y]:</span> <span class="stat-value text-cyan-400" id="maya-dequant">[0.00, 0.00]</span></div>
+            <div class="stat-row"><span class="stat-label">Max Error Bound:</span> <span class="stat-value text-yellow-400" id="maya-error">0.00m</span></div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 KERNEL: LEVENBERG-MARQUARDT TRILATERATION ENGINE
+        // ═══════════════════════════════════════════════════════════
+        class LMEngine {
+            static calculateGDOP(sensors, p) {
+                let a = 0, b = 0, d = 0;
+                for (let i = 0; i < sensors.length; i++) {
+                    let dx = p.x - sensors[i].x; let dy = p.y - sensors[i].y;
+                    let dist = Math.sqrt(dx*dx + dy*dy) || 0.0001;
+                    let u = dx / dist; let v = dy / dist; 
+                    a += u * u; b += u * v; d += v * v;
+                }
+                let det = (a * d) - (b * b);
+                if (Math.abs(det) < 1e-10) return 99.0; 
+                let traceInv = (a + d) / det;
+                return traceInv > 0 ? Math.sqrt(traceInv) : 99.0;
+            }
+
+            static classifyGeometry(sensors) {
+                if (sensors.length < 3) return { shape: 'Unknown', quality: 0.0 };
+                let s0 = sensors[0], s1 = sensors[1], s2 = sensors[2];
+                let d01 = Math.sqrt(Math.pow(s0.x - s1.x, 2) + Math.pow(s0.y - s1.y, 2));
+                let d02 = Math.sqrt(Math.pow(s0.x - s2.x, 2) + Math.pow(s0.y - s2.y, 2));
+                let d12 = Math.sqrt(Math.pow(s1.x - s2.x, 2) + Math.pow(s1.y - s2.y, 2));
+                let sides = [d01, d02, d12].sort((a, b) => a - b);
+                let ratio = sides[2] / (sides[0] || 0.0001); 
+                if (ratio < 2.0) return { shape: 'Isosceles', quality: 1.0 };
+                if (ratio <= 4.0) return { shape: 'Scalene', quality: 0.6 };
+                return { shape: 'Cross', quality: 0.3 };
+            }
+
+            static applyBilateralCoupling(sensors, distances, p_est) {
+                let n = sensors.length; let adj = new Array(n).fill(0);
+                let err = new Array(n).fill(0); let theta = new Array(n).fill(0);
+                const kappa = 0.3; let coupledPairs = 0;
+                for (let i = 0; i < n; i++) {
+                    let dx = p_est.x - sensors[i].x; let dy = p_est.y - sensors[i].y;
+                    err[i] = Math.sqrt(dx*dx + dy*dy) - distances[i];
+                    theta[i] = Math.atan2(dy, dx);
+                }
+                for (let i = 0; i < n; i++) {
+                    for (let j = i + 1; j < n; j++) {
+                        let dTheta = Math.abs(theta[i] - theta[j]);
+                        if (dTheta > Math.PI) dTheta = 2 * Math.PI - dTheta;
+                        if (dTheta > 2.5) { 
+                            let avg_err = (err[i] + err[j]) / 2.0;
+                            adj[i] += kappa * (avg_err - err[i]); adj[j] += kappa * (avg_err - err[j]);
+                            coupledPairs++;
+                        }
+                    }
+                }
+                let coupledDistances = distances.map((d, i) => d + adj[i]);
+                return { coupledDistances, coupledPairs };
+            }
+
+            static quantizeBase20(val, min = -10, max = 10) {
+                let norm = (val - min) / (max - min);
+                let level = Math.max(0, Math.min(19, Math.floor(norm * 20))); 
+                let dequant = min + ((level + 0.5) / 20.0) * (max - min);
+                return { level, dequant, error: Math.abs(val - dequant) };
+            }
+
+            static solvePass(sensors, distances, initialGuess = {x: 0, y: 0}) {
+                let p = { x: initialGuess.x, y: initialGuess.y };
+                let lambda = 0.1; const maxIter = 50; const tol = 0.01; 
+                let normDp = 999; let iter = 0;
+                for (iter = 0; iter < maxIter; iter++) {
+                    let r = []; let J = []; 
+                    for (let i = 0; i < sensors.length; i++) {
+                        let dx = p.x - sensors[i].x; let dy = p.y - sensors[i].y;
+                        let dist = Math.sqrt(dx*dx + dy*dy) || 0.0001;
+                        r.push(dist - distances[i]); J.push([dx/dist, dy/dist]);
+                    }
+                    let JTJ = [[0, 0], [0, 0]]; let JTr = [0, 0];
+                    for (let i = 0; i < sensors.length; i++) {
+                        JTJ[0][0] += J[i][0] * J[i][0]; JTJ[0][1] += J[i][0] * J[i][1];
+                        JTJ[1][0] += J[i][1] * J[i][0]; JTJ[1][1] += J[i][1] * J[i][1];
+                        JTr[0] += J[i][0] * r[i]; JTr[1] += J[i][1] * r[i];
+                    }
+                    JTJ[0][0] += lambda; JTJ[1][1] += lambda;
+                    let det = JTJ[0][0]*JTJ[1][1] - JTJ[0][1]*JTJ[1][0];
+                    if (Math.abs(det) < 1e-10) break; 
+                    let invJTJ = [[JTJ[1][1]/det, -JTJ[0][1]/det], [-JTJ[1][0]/det, JTJ[0][0]/det]];
+                    let dpX = invJTJ[0][0]*JTr[0] + invJTJ[0][1]*JTr[1];
+                    let dpY = invJTJ[1][0]*JTr[0] + invJTJ[1][1]*JTr[1];
+                    p.x -= dpX; p.y -= dpY;
+                    normDp = Math.sqrt(dpX*dpX + dpY*dpY);
+                    if (normDp < tol) break;
+                    lambda = Math.max(lambda / 2, 1e-6);
+                }
+                return { p, iter: iter+1, error: normDp };
+            }
+
+            static solveRobust(sensors, distances) {
+                let pass1 = this.solvePass(sensors, distances);
+                let residuals = sensors.map((s, i) => {
+                    let dx = pass1.p.x - s.x; let dy = pass1.p.y - s.y;
+                    return { index: i, resid: Math.abs(Math.sqrt(dx*dx + dy*dy) - distances[i]) };
+                });
+                let sortedResid = [...residuals].sort((a, b) => a.resid - b.resid);
+                let median_r = sortedResid[Math.floor(sortedResid.length / 2)].resid;
+                let threshold = Math.max(3 * median_r, 2.0); // 2.0m base for small grid
+                
+                let keepIndices = residuals.filter(r => r.resid <= threshold).map(r => r.index);
+                if (keepIndices.length < 3) keepIndices = sortedResid.slice(0, 3).map(r => r.index);
+                
+                let culledCount = sensors.length - keepIndices.length;
+                if (culledCount === 0) {
+                    let coupling = this.applyBilateralCoupling(sensors, distances, pass1.p);
+                    return { ...pass1, passes: 1, culled: 0, median_r, keptSensors: sensors.length, gdop: this.calculateGDOP(sensors, pass1.p), topology: this.classifyGeometry(sensors), coupledPairs: coupling.coupledPairs };
+                }
+
+                let prunedSensors = keepIndices.map(i => sensors[i]);
+                let prunedDistances = keepIndices.map(i => distances[i]);
+                let coupling = this.applyBilateralCoupling(prunedSensors, prunedDistances, pass1.p);
+                let pass2 = this.solvePass(prunedSensors, coupling.coupledDistances, pass1.p);
+                
+                return { p: pass2.p, iter: pass1.iter + pass2.iter, error: pass2.error, passes: 2, culled: culledCount, median_r, keptSensors: keepIndices.length, gdop: this.calculateGDOP(prunedSensors, pass2.p), topology: this.classifyGeometry(prunedSensors), coupledPairs: coupling.coupledPairs };
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 KERNEL: NEURAL EVENT BUS (Singleton)
+        // ═══════════════════════════════════════════════════════════
+        class NeuralBus {
+            constructor() {
+                this.signal = {};
+                this.listeners = new Set();
+                this.rewardListeners = new Set();
+            }
+            emit(signal) { this.signal = signal; this.listeners.forEach(fn => fn(signal)); }
+            subscribe(fn) { this.listeners.add(fn); }
+            sendReward(event) { this.rewardListeners.forEach(fn => fn(event)); }
+            onReward(fn) { this.rewardListeners.add(fn); }
+        }
+        const neuralBus = new NeuralBus();
+
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 FRONTEND: WEBGL MASTER RAIL VISUALIZATION
+        // ═══════════════════════════════════════════════════════════
+        const canvasContainer = document.getElementById('webgl-canvas');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x010204, 0.015);
+        const camera = new THREE.PerspectiveCamera(60, canvasContainer.clientWidth / canvasContainer.clientHeight, 0.1, 1000);
+        camera.position.set(0, 10, 40); camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        canvasContainer.appendChild(renderer.domElement);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+            camera.updateProjectionMatrix(); renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        });
+
+        const railGroup = new THREE.Group(); scene.add(railGroup);
+        const axonMat = new THREE.LineBasicMaterial({ color: 0x0033aa, transparent: true, opacity: 0.3 });
+        
+        for(let i=0; i<15; i++) {
+            const points = [];
+            let radius = Math.random() * 4 + 1; let angle = Math.random() * Math.PI * 2;
+            let xOffset = Math.cos(angle) * radius; let yOffset = Math.sin(angle) * radius;
+            for(let z=-100; z<=100; z+=10) points.push(new THREE.Vector3(xOffset + Math.sin(z * 0.05 + i) * 2, yOffset + Math.cos(z * 0.05 + i) * 2, z));
+            railGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), axonMat));
+        }
+
+        const signals = [];
+        const geoSignal = new THREE.SphereGeometry(0.4, 8, 8);
+        const matSignalBlue = new THREE.MeshBasicMaterial({ color: 0x00ffff, blending: THREE.AdditiveBlending });
+        const matSignalReward = new THREE.MeshBasicMaterial({ color: 0xff00ff, blending: THREE.AdditiveBlending });
+        const geoLM = new THREE.OctahedronGeometry(1.5, 0);
+        const matLM = new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, transparent: true, opacity: 0.8 });
+        const matLMFault = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.8 });
+
+        function spawnSignal(type, coordX = null, coordY = null, wasCulled = false) {
+            let mesh;
+            let angle = Math.random() * Math.PI * 2; let radius = Math.random() * 4;
+            let x = coordX !== null ? coordX : Math.cos(angle) * radius;
+            let y = coordY !== null ? coordY : Math.sin(angle) * radius;
+
+            if (type === 'LM') {
+                mesh = new THREE.Mesh(geoLM, wasCulled ? matLMFault : matLM); 
+            } else {
+                mesh = new THREE.Mesh(geoSignal, type === 'reward' ? matSignalReward : matSignalBlue);
+                mesh.scale.setScalar(type === 'reward' ? 2.5 : 1.0);
+            }
+            mesh.position.set(x, y, -80); railGroup.add(mesh);
+            signals.push({ mesh, speed: type==='normal' ? 1.0+Math.random() : 2.5, wobble: Math.random()*Math.PI*2, baseX: x, baseY: y, isLM: type==='LM' });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            railGroup.rotation.z += 0.002;
+            for (let i = signals.length - 1; i >= 0; i--) {
+                let s = signals[i]; s.mesh.position.z += s.speed; s.wobble += 0.1;
+                s.mesh.position.x = s.baseX + Math.sin(s.wobble) * 0.5; s.mesh.position.y = s.baseY + Math.cos(s.wobble) * 0.5;
+                if (s.isLM) { s.mesh.rotation.x += 0.05; s.mesh.rotation.y += 0.05; }
+                if (s.mesh.position.z > 50) { railGroup.remove(s.mesh); signals.splice(i, 1); }
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 ORCHESTRATOR: BINDINGS & MOCK ENGINE
+        // ═══════════════════════════════════════════════════════════
+        let lastTick = performance.now(); let tickCount = 0;
+
+        neuralBus.subscribe((sig) => {
+            tickCount++; let now = performance.now();
+            if (now - lastTick > 1000) { document.getElementById('tick-rate').innerText = `${tickCount} Hz`; tickCount = 0; lastTick = now; }
+
+            // Update Telemetry
+            document.getElementById('tel-spikes').innerText = sig.firedCount;
+            document.getElementById('tel-ent').innerText = sig.entropy.toFixed(3);
+            document.getElementById('tel-coh').innerText = sig.coherence.toFixed(3);
+            document.getElementById('tel-burst').innerText = `${sig.burstRate.toFixed(1)} Hz`;
+            document.getElementById('tel-gaba').innerText = sig.gabaLevel.toFixed(2);
+            
+            document.getElementById('val-dop').innerText = sig.mods.dopamine.toFixed(2); document.getElementById('bar-dop').style.width = `${sig.mods.dopamine * 100}%`;
+            document.getElementById('val-ser').innerText = sig.mods.serotonin.toFixed(2); document.getElementById('bar-ser').style.width = `${sig.mods.serotonin * 100}%`;
+            document.getElementById('val-ace').innerText = sig.mods.acetylcholine.toFixed(2); document.getElementById('bar-ace').style.width = `${sig.mods.acetylcholine * 100}%`;
+            document.getElementById('val-nor').innerText = sig.mods.norepinephrine.toFixed(2); document.getElementById('bar-nor').style.width = `${sig.mods.norepinephrine * 100}%`;
+
+            // Update NEAT
+            document.getElementById('env-bthermal').innerText = `${sig.b_thermal.toFixed(1)}%`;
+            document.getElementById('env-bmoisture').innerText = `${sig.b_moisture.toFixed(1)}%`;
+            document.getElementById('env-bkinetic').innerText = `${sig.b_kinetic.toFixed(1)}%`;
+            document.getElementById('env-bpressure').innerText = `${sig.b_pressure.toFixed(1)}%`;
+            
+            let neatEl = document.getElementById('env-neat');
+            neatEl.innerText = `${sig.neat}%`;
+            if (sig.neat >= 75) { neatEl.className = 'stat-value text-red-500 heartbeat'; neatEl.style.textShadow = '0 0 15px #ff0000'; } 
+            else if (sig.neat >= 50) { neatEl.className = 'stat-value text-orange-400'; neatEl.style.textShadow = '0 0 10px #ffaa00'; } 
+            else { neatEl.className = 'stat-value text-green-400'; neatEl.style.textShadow = '0 0 10px #00ff00'; }
+
+            if (Math.random() < sig.burstRate / 100) spawnSignal('normal');
+        });
+
+        const LMNodes = [{ x: -5, y: 5 }, { x: 5, y: 5 }, { x: 0, y: -6 }, { x: -6, y: -4 }, { x: 6, y: -4 }, { x: 0, y: 0 }];
+        const rewardContainer = document.getElementById('reward-log-container');
+
+        neuralBus.onReward((ev) => {
+            const isPos = ev.value > 0;
+            const valStr = (isPos ? '+' : '') + ev.value.toFixed(2);
+            
+            const div = document.createElement('div');
+            div.className = 'reward-log';
+            div.innerHTML = `<div class="flex justify-between"><span class="text-magenta-400 font-bold">[${ev.source}]</span><span class="${isPos?'text-cyan-400':'text-red-500'} font-bold">${valStr}</span></div>`;
+            rewardContainer.prepend(div);
+            if (rewardContainer.childElementCount > 4) rewardContainer.removeChild(rewardContainer.lastChild);
+
+            // LM Trilateration Event
+            const realX = (Math.random() - 0.5) * 8; const realY = (Math.random() - 0.5) * 8;
+            const faultyIdx = Math.floor(Math.random() * LMNodes.length);
+            const dists = LMNodes.map((s, idx) => Math.sqrt(Math.pow(realX-s.x,2) + Math.pow(realY-s.y,2)) + ((Math.random()-0.5)*0.1) + (idx===faultyIdx ? (Math.random()>0.5?15:-15) : 0));
+
+            const lmRes = LMEngine.solveRobust(LMNodes, dists);
+            
+            document.getElementById('lm-sensors').innerText = `${lmRes.keptSensors} / ${LMNodes.length}`;
+            document.getElementById('lm-mad').innerText = lmRes.median_r.toFixed(2) + 'm';
+            document.getElementById('lm-culled').innerText = lmRes.culled;
+            document.getElementById('lm-coord').innerText = `[${lmRes.p.x.toFixed(2)}, ${lmRes.p.y.toFixed(2)}]`;
+            document.getElementById('lm-iters').innerText = `${lmRes.passes} P / ${lmRes.iter} Iters`;
+            document.getElementById('lm-norm').innerText = lmRes.error.toFixed(4) + 'm';
+            
+            let gdopEl = document.getElementById('lm-gdop');
+            if(lmRes.gdop >= 99.0) { gdopEl.innerText = 'POOR'; gdopEl.className = 'stat-value text-red-500'; }
+            else { gdopEl.innerText = lmRes.gdop.toFixed(2); gdopEl.className = `stat-value ${lmRes.gdop < 2 ? 'text-green-400' : 'text-yellow-400'}`; }
+
+            let topoEl = document.getElementById('lm-topo');
+            topoEl.innerText = `${lmRes.topology.shape}`; topoEl.className = `stat-value ${lmRes.topology.quality===1.0 ? 'text-green-400' : 'text-red-500'}`;
+
+            // Maya-20 Quantization Update
+            const qX = LMEngine.quantizeBase20(lmRes.p.x); const qY = LMEngine.quantizeBase20(lmRes.p.y);
+            document.getElementById('maya-level').innerText = `[${qX.level}, ${qY.level}]`;
+            document.getElementById('maya-dequant').innerText = `[${qX.dequant.toFixed(2)}, ${qY.dequant.toFixed(2)}]`;
+            document.getElementById('maya-error').innerText = `±${Math.max(qX.error, qY.error).toFixed(2)}m`;
+
+            spawnSignal('reward'); 
+            spawnSignal('LM', lmRes.p.x, lmRes.p.y, lmRes.culled > 0); 
+        });
+
+        // The Heartbeat (Mock State Generator)
+        let mState = { tick: 0, firedCount: 0, entropy: 0.5, coherence: 0.8, burstRate: 15, gabaLevel: 1.0, mods: { dopamine: 0.5, serotonin: 0.5, acetylcholine: 0.5, norepinephrine: 0.3 }};
+        
+        setInterval(() => {
+            mState.tick++;
+            mState.firedCount += Math.floor(Math.random() * 5);
+            mState.burstRate = Math.max(0, 15 + Math.sin(mState.tick * 0.05) * 10 + Math.random() * 5);
+            mState.entropy = 0.5 + Math.sin(mState.tick * 0.01) * 0.3; mState.coherence = 0.8 - Math.abs(Math.sin(mState.tick * 0.02)) * 0.4;
+            
+            // Env NEAT Dynamics
+            let b_th = Math.max(0, Math.min(100, (((80 + Math.sin(mState.tick * 0.002)*30) - 32) / 88) * 100));
+            let rain = Math.max(0, Math.sin(mState.tick * 0.001)*2 - 1.5);
+            let b_mo = Math.max(0, Math.min(100, (60 + Math.sin(mState.tick * 0.0015)*30) * (1 + rain*0.05)));
+            let b_ki = Math.max(0, Math.min(100, ((20 + Math.sin(mState.tick * 0.003)*70) / 120) * 100));
+            let b_pr = Math.max(0, Math.min(100, ((1013 - (1013 - Math.abs(Math.sin(mState.tick * 0.001)*40))) / 30) * 100));
+            
+            let neat = Math.round((0.3*b_th) + (0.3*b_mo) + (0.2*b_ki) + (0.2*b_pr));
+            if(neat > 75) { mState.entropy += 0.2; mState.coherence -= 0.2; }
+            
+            mState.b_thermal = b_th; mState.b_moisture = b_mo; mState.b_kinetic = b_ki; mState.b_pressure = b_pr; mState.neat = neat;
+            neuralBus.emit(mState);
+        }, 16);
+
+        setInterval(() => {
+            neuralBus.sendReward({ source: Math.random()>0.5 ? 'Quantum_VQE' : 'Trident_HPC', value: Math.random()>0.3 ? 0.85 : -0.4, reason: 'Pattern Math' });
+        }, 3000); 
+
+    </script>
+</body>
+</html>
