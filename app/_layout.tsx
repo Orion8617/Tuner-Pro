@@ -2,7 +2,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { Alert } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold } from "@expo-google-fonts/dm-sans";
@@ -15,7 +14,7 @@ import Colors from "@/constants/colors";
 try {
   initializeRevenueCat();
 } catch (err: any) {
-  Alert.alert("RevenueCat Unavailable", err?.message ?? "Unknown error");
+  console.warn("[RevenueCat] Init error:", err?.message ?? err);
 }
 
 SplashScreen.preventAutoHideAsync();
