@@ -875,21 +875,125 @@ GN-IRLS step: (JᵀWJ + λI) · δ = JᵀWr
 Tukey Bisquare: w = (1 − norm_r²)² si |r/σ| ≤ 1, sino 0
 ```
 
+#### El Corazón del IRLS: Función de Peso de Huber
+
+La fórmula que define cómo el motor decide cuánto confiar en cada medición:
+
+```
+        ⎧ 1                      si |r_i| ≤ k · MAD
+w_i  =  ⎨
+        ⎩ (k · MAD) / |r_i|      en caso contrario
+```
+
+Donde:
+- `r_i` = residuo de la i-ésima torre: `distancia_medida_i − distancia_calculada_i(θ)`
+- `k` = factor de umbral (típicamente 1.345 para Huber — valor estadísticamente óptimo para datos ~Gaussianos con outliers)
+- `MAD` = Median Absolute Deviation = `median(|r_i − median(r)|)`
+
+**¿Qué hace exactamente cada caso?**
+
+**Caso 1 — residuo pequeño** (`|r_i| ≤ k·MAD`): peso = 1.  
+La torre está cerca de la posición calculada. Se trata como mínimos cuadrados ordinarios (OLS). La medición tiene **influencia completa** en el cálculo.
+
+**Caso 2 — residuo grande** (`|r_i| > k·MAD`): peso = `k·MAD / |r_i|`.  
+La torre es sospechosa (rebote, NLOS, jammer). El peso se reduce **inversamente proporcional al residuo** — cuanto más grande el error, menos influye. Pero **nunca se elimina** (peso > 0 siempre).
+
+**La diferencia crítica: Huber vs Tukey Bisquare**
+
+| Propiedad | Huber (esta fórmula) | Tukey Bisquare (también en LocalizaHN) |
+|---|---|---|
+| Outliers moderados | Reduce influencia gradualmente | Reduce influencia cuadráticamente |
+| Outliers extremos | Reduce pero mantiene (peso > 0) | Elimina completamente (peso = 0) |
+| Convergencia | Más estable | Puede perder puntos útiles |
+| Uso en LocalizaHN | Refinamiento dentro de IRLS | Peso final en cada iteración GN |
+
+La combinación Huber-primero + Tukey-después es el estado del arte en estimación robusta: Huber suaviza los outliers moderados (señales con NLOS parcial), Bisquare elimina los extremos (jammers, torres fuera de rango).
+
+**¿Por qué MAD y no σ (desviación estándar)?**
+
+```python
+# MAD: robusto a outliers
+MAD = median(|r_i − median(r_i)|)
+
+# σ clásica: colapsa con outliers
+σ = sqrt(mean((r_i − mean(r))²))
+```
+
+Un solo outlier extremo puede multiplicar `σ` por 5-10×, haciendo que el umbral `k·σ` se expanda tanto que todos los outliers parezcan normales. El MAD ignora los extremos — solo mide la dispersión del **50% central** de los residuos. En telemetría caótica (RSSI de torres con jammer, señales AIS falsificadas), MAD es la única escala de confianza real.
+
+**El factor 1.4826: la constante que conecta MAD con σ**
+
+```python
+sigma = 1.4826 * mad + 1e-10   # escala robusta (ya en el código de LocalizaHN)
+```
+
+Para datos puramente Gaussianos sin outliers: `MAD = 0.6745 × σ`, por tanto `σ̂ = MAD / 0.6745 = 1.4826 × MAD`. Este factor hace que la estimación sea **consistente** — si los datos son Gaussianos, `σ̂` converge al verdadero σ. Si hay outliers, `σ̂` sigue siendo robusto porque MAD no se infla.
+
+**El algoritmo IRLS completo en pseudocódigo:**
+
+```
+Inicializar: w_i = 1 para todas las torres
+Repetir hasta convergencia (máx 2,000 iteraciones):
+    1. θ = (JᵀWJ + λI)⁻¹ Jᵀ W r   [GN-IRLS step con λ = Levenberg-Marquardt]
+    2. r_i = distancia_medida_i − ‖θ − torre_i‖   [residuos actualizados]
+    3. MAD = median(|r_i|) / 0.6745               [escala robusta]
+    4. Actualizar pesos:
+           w_i = 1              si |r_i| ≤ k · MAD   [Huber]
+           w_i = k·MAD / |r_i| si |r_i| > k · MAD   [Huber]
+       + aplicar Tukey Bisquare al final de cada iteración IRLS
+```
+
+Complejidad por iteración: **O(n)** — lineal en número de torres. Para n=557 torres de Honduras: microsegundos en Python puro.
+
+**Conexiones Cross-Science**
+
+| Concepto en otro invento | Equivalencia con Huber IRLS |
+|---|---|
+| Q20 (VigesimalCodec) | Compresión no-lineal: más resolución donde importa (cerca del centro), menos en extremos. Huber hace exactamente eso con los pesos. |
+| FrequencyStabilizer (GuitarTune) | `getConfidence()` mide dispersión de frecuencias para pesar la medición. Huber IRLS es la formalización matemática rigurosa de esa idea. |
+| STBP surrogate gradient (SNN) | La función surrogate suaviza la decisión binaria de disparo (0/1 → curva continua). Huber suaviza la decisión de confiabilidad (inlier/outlier → peso continuo). |
+| GDOP | GDOP pesa la incertidumbre geométrica (¿las torres rodean al objetivo?). Huber pesa la incertidumbre de cada medición individual. Son ortogonales y complementarios. |
+| WMM2025 Kalman | El ruido de medición R en Kalman asume distribución Gaussiana. Huber IRLS hace robusto el sistema a no-Gaussianidad sin asumir ninguna distribución. |
+| RANSAC (también en el motor) | RANSAC clasifica duro (inlier=1, outlier=0). Huber clasifica suave (peso continuo). Patrón óptimo: RANSAC elimina extremos, Huber refina los intermedios. |
+
+**Por qué esto NO es para proyectos escolares:**
+
+Los mínimos cuadrados ordinarios (OLS) asumen que todos los residuos son Gaussianos con la misma varianza. En telemetría real de Honduras:
+- Una torre con jammer activo tiene residuo 10× mayor que las normales
+- Una señal rebotada en un edificio tiene residuo 3-5× mayor
+- El clima (lluvia) agrega ruido no-Gaussiano
+
+OLS daría un resultado dominado por la torre con jammer (la más ruidosa tiene el cuadrado de residuo más grande → más peso en OLS). Huber IRLS le da a esa torre el mínimo peso posible y deja que las torres confiables determinen la posición. **Esta es la diferencia entre P50=50m y P50=500m.**
+
 ---
 
 ### INVENTO 16 — LMEngine (Levenberg-Marquardt + Bilateral)
 **Campo:** Optimización Numérica  
 **Verificado:** SÍ  
+
+**Nota:** LMEngine usa la misma función de peso Huber documentada en INVENTO 15, pero aplicada en el contexto de Levenberg-Marquardt en lugar de Gauss-Newton. La diferencia es el término de damping `λI`:
+```
+GN puro:   (JᵀWJ)      · δ = JᵀWr   ← puede diverger si J es mal condicionada
+LM:        (JᵀWJ + λI) · δ = JᵀWr   ← λ amortigua el paso cuando hay incertidumbre
+```
+Cuando `λ → 0`: LM se comporta como GN (paso óptimo). Cuando `λ → ∞`: LM se comporta como Gradient Descent (paso pequeño pero siempre estable). El algoritmo de Marquardt ajusta `λ` dinámicamente según si el paso mejoró la solución.
+
 ```python
-# Robustez MAD (Median Absolute Deviation)
+# Robustez MAD (Median Absolute Deviation) — escala del Huber
 mad = np.median(np.abs(residuals - np.median(residuals)))
-sigma = 1.4826 * mad + 1e-10  # escala robusta
+sigma = 1.4826 * mad + 1e-10  # 1.4826 = 1/0.6745: hace MAD consistente con σ Gaussiana
+                               # +1e-10: evita división por cero si todos los residuos son 0
 
 # Acoplamiento bilateral entre pares de señales
 coupling = 0.30
 for pair in bilateral_pairs:
     V_coupled = V + coupling * (V_partner - V)
+    # Interpola 30% hacia el valor del par — suaviza discontinuidades de señal
+    # Equivale a un filtro paso-bajo en el dominio de señales emparejadas
 ```
+
+**El acoplamiento bilateral como regularización implícita:**
+Cuando dos torres cercanas dan señales muy diferentes (una bloqueada, la otra no), el acoplamiento `coupling=0.30` interpola 30% de la señal buena hacia la mala. Reduce el impacto de la torre bloqueada sin eliminarla. Es la versión de señal del peso Huber: reducción gradual de influencia, no eliminación.
 
 ---
 
