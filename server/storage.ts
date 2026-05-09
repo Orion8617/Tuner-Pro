@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   users, subscriptions, solanaSessions,
@@ -35,6 +35,16 @@ export interface IStorage {
   }): Promise<SolanaSession>;
   getSolanaSession(reference: string): Promise<SolanaSession | undefined>;
   confirmSolanaSession(reference: string): Promise<void>;
+  // ─── Admin ────────────────────────────────────────────────────────────────
+  getAdminStats(): Promise<{
+    activeTotal: number;
+    byPlan: Record<string, number>;
+    mrr: number;
+    solanaConfirmed: number;
+  }>;
+  getRecentSubscriptions(limit: number): Promise<Subscription[]>;
+  getRecentSolanaSessions(limit: number): Promise<SolanaSession[]>;
+  grantPremium(userId: string, plan: "monthly" | "quarterly" | "annual" | "lifetime"): Promise<Subscription>;
 }
 
 // ─── PostgreSQL implementation ───────────────────────────────────────────────
@@ -171,6 +181,91 @@ class DbStorage implements IStorage {
       .update(solanaSessions)
       .set({ status: "confirmed" })
       .where(eq(solanaSessions.reference, reference));
+  }
+
+  async getAdminStats(): Promise<{
+    activeTotal: number;
+    byPlan: Record<string, number>;
+    mrr: number;
+    solanaConfirmed: number;
+  }> {
+    const rows = await db
+      .select({
+        plan: subscriptions.plan,
+        status: subscriptions.status,
+        count: sql<number>`cast(count(*) as int)`,
+      })
+      .from(subscriptions)
+      .groupBy(subscriptions.plan, subscriptions.status);
+
+    const byPlan: Record<string, number> = {};
+    let activeTotal = 0;
+
+    for (const row of rows) {
+      if (row.status === "active") {
+        byPlan[row.plan] = (byPlan[row.plan] ?? 0) + row.count;
+        activeTotal += row.count;
+      }
+    }
+
+    const MRR_MAP: Record<string, number> = {
+      monthly: 1.99,
+      quarterly: 4.99 / 3,
+      annual: 9.99 / 12,
+      lifetime: 0,
+    };
+    const mrr = Object.entries(byPlan).reduce(
+      (sum, [plan, cnt]) => sum + (MRR_MAP[plan] ?? 0) * cnt,
+      0
+    );
+
+    const solanaRows = await db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(solanaSessions)
+      .where(eq(solanaSessions.status, "confirmed"));
+    const solanaConfirmed = solanaRows[0]?.count ?? 0;
+
+    return { activeTotal, byPlan, mrr, solanaConfirmed };
+  }
+
+  async getRecentSubscriptions(limit: number): Promise<Subscription[]> {
+    return db
+      .select()
+      .from(subscriptions)
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(limit);
+  }
+
+  async getRecentSolanaSessions(limit: number): Promise<SolanaSession[]> {
+    return db
+      .select()
+      .from(solanaSessions)
+      .orderBy(desc(solanaSessions.createdAt))
+      .limit(limit);
+  }
+
+  async grantPremium(
+    userId: string,
+    plan: "monthly" | "quarterly" | "annual" | "lifetime"
+  ): Promise<Subscription> {
+    const lsId = `admin-grant-${userId}-${Date.now()}`;
+    const periodEnd =
+      plan === "lifetime"
+        ? new Date("2099-12-31").toISOString()
+        : plan === "annual"
+        ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+        : plan === "quarterly"
+        ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    return this.upsertSubscription({
+      userId,
+      lemonSqueezyId: lsId,
+      orderId: lsId,
+      plan,
+      status: "active",
+      currentPeriodEnd: periodEnd,
+    });
   }
 }
 

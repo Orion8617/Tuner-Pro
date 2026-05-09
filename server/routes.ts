@@ -385,6 +385,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.status(200).json({ received: true });
   });
 
+  // ─── Admin Routes ────────────────────────────────────────────────────────────
+  const ADMIN_ID = "admin-juanjose-klonengine-2025";
+
+  function requireAdmin(req: Request, res: Response): boolean {
+    const adminId = req.headers["x-admin-id"] as string | undefined;
+    if (adminId !== ADMIN_ID) {
+      res.status(401).json({ error: "Unauthorized" });
+      return false;
+    }
+    return true;
+  }
+
+  app.get("/api/admin/dashboard", async (req: Request, res: Response) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const [stats, recentSubs, recentSolana] = await Promise.all([
+        storage.getAdminStats(),
+        storage.getRecentSubscriptions(20),
+        storage.getRecentSolanaSessions(20),
+      ]);
+      return res.json({ stats, recentSubs, recentSolana });
+    } catch (err) {
+      console.error("[Admin] dashboard error:", err);
+      return res.status(500).json({ error: "Internal error" });
+    }
+  });
+
+  app.post("/api/admin/grant-premium", async (req: Request, res: Response) => {
+    if (!requireAdmin(req, res)) return;
+    const { userId, plan } = req.body as {
+      userId: string;
+      plan: "monthly" | "quarterly" | "annual" | "lifetime";
+    };
+    if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
+    if (!["monthly", "quarterly", "annual", "lifetime"].includes(plan)) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+    try {
+      const sub = await storage.grantPremium(userId, plan);
+      console.log(`[Admin] Granted ${plan} premium to user ${userId}`);
+      return res.json({ success: true, subscription: sub });
+    } catch (err) {
+      console.error("[Admin] grant-premium error:", err);
+      return res.status(500).json({ error: "Internal error" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
