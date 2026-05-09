@@ -1,12 +1,23 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const path = require("path");
 
 const config = getDefaultConfig(__dirname);
+
+const STATE_DIR = path.join(__dirname, ".local", "state");
+const SKILLS_DIR = path.join(__dirname, ".local", "skills");
+const MCP_DIR = path.join(__dirname, ".local", "mcp_skills");
 
 config.resolver = {
   ...config.resolver,
   blockList: [
-    /\.local\/skills\/.*/,
+    new RegExp(`^${escapeRegex(STATE_DIR)}(/.*)?$`),
+    new RegExp(`^${escapeRegex(SKILLS_DIR)}(/.*)?$`),
+    new RegExp(`^${escapeRegex(MCP_DIR)}(/.*)?$`),
   ],
 };
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 module.exports = config;
