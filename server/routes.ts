@@ -4,6 +4,28 @@ import crypto from "node:crypto";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { storage } from "./storage";
 
+// ─── Input validation ────────────────────────────────────────────────────────
+const USER_ID_REGEX = /^[a-zA-Z0-9_\-]{1,128}$/;
+function isValidUserId(id: unknown): id is string {
+  return typeof id === "string" && USER_ID_REGEX.test(id);
+}
+
+// ─── In-memory rate limiter (per IP, per route) ───────────────────────────────
+const _rateMap = new Map<string, { count: number; resetAt: number }>();
+function rateLimit(ip: string, route: string, maxPerMinute: number): boolean {
+  const key = `${ip}:${route}`;
+  const now = Date.now();
+  const entry = _rateMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    _rateMap.set(key, { count: 1, resetAt: now + 60_000 });
+    return true; // allowed
+  }
+  entry.count += 1;
+  if (entry.count > maxPerMinute) return false; // blocked
+  return true;
+}
+
+// ─── USDC mint on Solana mainnet ─────────────────────────────────────────────
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 const PLAN_PRICES = {
@@ -52,8 +74,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/subscription/status", async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
-    if (!userId) return res.status(400).json({ error: "userId is required" });
+    const userId = req.query.userId;
+    if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
+
+    const ip = req.ip || "unknown";
+    if (!rateLimit(ip, "subscription-status", 30)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
 
     const subscription = await storage.getSubscription(userId);
     if (subscription && subscription.status === "active") {
@@ -69,9 +96,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/checkout/url", (req: Request, res: Response) => {
     const plan = req.query.plan as string;
-    const userId = req.query.userId as string;
+    const userId = req.query.userId;
 
-    if (!plan || !userId) return res.status(400).json({ error: "plan and userId are required" });
+    if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
+    if (!plan || !["monthly", "annual", "lifetime"].includes(plan)) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+
+    const ip = req.ip || "unknown";
+    if (!rateLimit(ip, "checkout-url", 10)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
 
     const monthlyUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_MONTHLY;
     const annualUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_ANNUAL;
@@ -169,8 +204,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       token?: "usdc" | "sol";
     };
 
-    if (!userId || !["quarterly", "lifetime"].includes(plan)) {
+    if (!isValidUserId(userId) || !["quarterly", "lifetime"].includes(plan)) {
       return res.status(400).json({ error: "userId and plan (quarterly|lifetime) required" });
+    }
+    if (!["usdc", "sol"].includes(token)) {
+      return res.status(400).json({ error: "Invalid token type" });
+    }
+
+    const ip = req.ip || "unknown";
+    if (!rateLimit(ip, "solana-create", 5)) {
+      return res.status(429).json({ error: "Too many requests" });
     }
 
     const recipientAddress = process.env.SOLANA_WALLET_ADDRESS;
@@ -222,7 +265,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/checkout/solana/verify", async (req: Request, res: Response) => {
     const { reference, userId } = req.query as { reference: string; userId: string };
 
-    if (!reference || !userId) return res.status(400).json({ error: "reference and userId required" });
+    if (!isValidUserId(userId) || !reference || typeof reference !== "string") {
+      return res.status(400).json({ error: "reference and userId required" });
+    }
+
+    const ip = req.ip || "unknown";
+    if (!rateLimit(ip, "solana-verify", 20)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
 
     const session = await storage.getSolanaSession(reference);
     if (!session) return res.status(404).json({ error: "Session not found" });

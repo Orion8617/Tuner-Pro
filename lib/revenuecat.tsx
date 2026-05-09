@@ -27,9 +27,13 @@ function getRevenueCatApiKey() {
 
 export function initializeRevenueCat() {
   const apiKey = getRevenueCatApiKey();
-  Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+  if (__DEV__) {
+    Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+    console.log("[RevenueCat] Initialized in dev mode");
+  } else {
+    Purchases.setLogLevel(Purchases.LOG_LEVEL.ERROR);
+  }
   Purchases.configure({ apiKey });
-  console.log("[RevenueCat] Configured with key:", apiKey.slice(0, 12) + "...");
 }
 
 function useSubscriptionContext() {
