@@ -1,0 +1,43 @@
+uploads = []
+
+[[generated]]
+id = "nkNAqQ5QCaoaS8aCnjfX9"
+uri = "file://assets/images/icon-v1-dial.png"
+type = "image"
+title = "tuner dial icon cyan"
+
+[[generated]]
+id = "hj8bRXO5iQZs9fo6d78fb"
+uri = "file://assets/images/icon-v2-string.png"
+type = "image"
+title = "vibrating string icon teal"
+
+[[generated]]
+id = "oF3qNjDs1sN9T-tX_4M9Q"
+uri = "file://assets/images/icon-v3-needle.png"
+type = "image"
+title = "needle compass icon dark cyan"
+
+[[generated]]
+id = "3naOIloY-tvAlQJnT-0d1"
+uri = "file://assets/images/android-icon-monochrome.png"
+type = "image"
+title = "monochrome tuner dial icon"
+
+[[generated]]
+id = "JdK6tMxZXjxc2AhIRBjBL"
+uri = "file://assets/images/android-icon-background.png"
+type = "image"
+title = "solid dark background android"
+
+[[outputs]]
+id = "xscWONlwPgalnhoWpNS7M"
+uri = "file://assets/images/icon.png"
+type = "image"
+title = "Ícono GuitarTune Pro — iOS App Store"
+
+[[outputs]]
+id = "BvfoUX_ard-osRh3gS3RZ"
+uri = "file://assets/images/android-icon-monochrome.png"
+type = "image"
+title = "Ícono monocromo — Android"
