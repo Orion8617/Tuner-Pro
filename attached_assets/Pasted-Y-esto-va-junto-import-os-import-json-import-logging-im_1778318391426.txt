@@ -1,0 +1,476 @@
+Y esto va junto ? import os
+import json
+import logging
+import random
+import threading
+import time
+import math
+from datetime import datetime, timezone, timedelta
+from collections import OrderedDict
+
+logger = logging.getLogger(__name__)
+
+AISSTREAM_WS_URL = 'wss://stream.aisstream.io/v0/stream'
+AISSTREAM_API_KEY = os.environ.get('AISSTREAM_API_KEY', '')
+
+HONDURAS_BBOX = [[12.0, -90.0], [18.5, -82.0]]
+CARIBBEAN_BBOX = [[8.0, -92.0], [22.0, -75.0]]
+CENTRAL_AMERICA_BBOX = [[7.0, -93.0], [23.0, -75.0]]
+
+MSG_TYPE_MAP = {
+    1: 'Position Report Class A',
+    2: 'Position Report Class A (Assigned)',
+    3: 'Position Report Class A (Response)',
+    4: 'Base Station Report',
+    5: 'Static and Voyage',
+    18: 'Position Report Class B',
+    19: 'Extended Position Report Class B',
+    21: 'Aid to Navigation',
+    24: 'Class B CS Static',
+    27: 'Long Range AIS Broadcast',
+}
+
+VESSEL_TYPE_MAP = {
+    0: 'No disponible',
+    20: 'Wing in ground',
+    30: 'Pesquero', 31: 'Remolcador', 32: 'Remolcador', 33: 'Draga',
+    34: 'Operación de buceo', 35: 'Operación militar',
+    36: 'Velero', 37: 'Embarcación de recreo',
+    40: 'Embarcación de alta velocidad',
+    50: 'Piloto', 51: 'SAR', 52: 'Remolcador',
+    53: 'Barco policía', 54: 'Médico',
+    55: 'Resolución no combatiente',
+    60: 'Pasajeros', 61: 'Pasajeros', 62: 'Pasajeros', 63: 'Pasajeros',
+    64: 'Pasajeros', 65: 'Pasajeros', 66: 'Pasajeros', 67: 'Pasajeros',
+    68: 'Pasajeros', 69: 'Pasajeros',
+    70: 'Carga', 71: 'Carga/DG', 72: 'Carga/DG', 73: 'Carga/DG',
+    74: 'Carga/DG', 75: 'Carga', 76: 'Carga', 77: 'Carga',
+    78: 'Carga', 79: 'Carga',
+    80: 'Tanquero', 81: 'Tanquero/DG', 82: 'Tanquero/DG',
+    83: 'Tanquero/DG', 84: 'Tanquero/DG', 85: 'Tanquero',
+    86: 'Tanquero', 87: 'Tanquero', 88: 'Tanquero', 89: 'Tanquero',
+}
+
+NAV_STATUS_MAP = {
+    0: 'En ruta con motor',
+    1: 'Anclado',
+    2: 'Sin gobierno',
+    3: 'Maniobrabilidad restringida',
+    4: 'Restringido por calado',
+    5: 'Amarrado',
+    6: 'Varado',
+    7: 'Pescando',
+    8: 'Navegando a vela',
+    14: 'AIS-SART activo',
+    15: 'No definido',
+}
+
+MAX_VESSELS = 5000
+CACHE_TTL_S = 30
+
+
+class AISStreamVessel:
+    __slots__ = ('mmsi', 'name', 'callsign', 'imo', 'vessel_type', 'vessel_type_text',
+                 'lat', 'lon', 'speed', 'course', 'heading', 'nav_status', 'nav_status_text',
+                 'destination', 'eta', 'draught', 'length', 'width',
+                 'flag', 'last_update', 'position_history', 'msg_count')
+
+    def __init__(self, mmsi):
+        self.mmsi = str(mmsi)
+        self.name = ''
+        self.callsign = ''
+        self.imo = ''
+        self.vessel_type = 0
+        self.vessel_type_text = ''
+        self.lat = 0.0
+        self.lon = 0.0
+        self.speed = 0.0
+        self.course = 0.0
+        self.heading = 0.0
+        self.nav_status = 15
+        self.nav_status_text = 'No definido'
+        self.destination = ''
+        self.eta = ''
+        self.draught = 0.0
+        self.length = 0
+        self.width = 0
+        self.flag = ''
+        self.last_update = None
+        self.position_history = []
+        self.msg_count = 0
+
+
+class AISStreamClient:
+
+    def __init__(self, api_key=None, bbox=None):
+        self.api_key = api_key or AISSTREAM_API_KEY
+        self.bbox = bbox or CARIBBEAN_BBOX
+        self.vessels = OrderedDict()
+        self.stats = {
+            'messages_received': 0,
+            'vessels_tracked': 0,
+            'last_message_time': None,
+            'connection_status': 'DISCONNECTED',
+            'start_time': None,
+            'errors': 0,
+            'msg_types': {},
+        }
+        self._lock = threading.Lock()
+        self._ws_thread = None
+        self._running = False
+        self._last_cleanup = time.time()
+
+    @property
+    def is_connected(self):
+        return self.stats['connection_status'] == 'CONNECTED'
+
+    @property
+    def has_api_key(self):
+        return bool(self.api_key)
+
+    def process_aisstream_message(self, raw_data):
+        try:
+            if isinstance(raw_data, str):
+                data = json.loads(raw_data)
+            else:
+                data = raw_data
+
+            msg_type = data.get('MessageType', '')
+            msg = data.get('Message', {})
+            meta = data.get('MetaData', {})
+
+            mmsi = str(meta.get('MMSI', ''))
+            if not mmsi or mmsi == '0':
+                return None
+
+            with self._lock:
+                self.stats['messages_received'] += 1
+                self.stats['last_message_time'] = datetime.now(timezone.utc).isoformat()
+                self.stats['msg_types'][msg_type] = self.stats['msg_types'].get(msg_type, 0) + 1
+
+                if mmsi not in self.vessels:
+                    if len(self.vessels) >= MAX_VESSELS:
+                        self.vessels.popitem(last=False)
+                    self.vessels[mmsi] = AISStreamVessel(mmsi)
+
+                vessel = self.vessels[mmsi]
+                vessel.msg_count += 1
+                vessel.last_update = datetime.now(timezone.utc)
+
+                ship_name = meta.get('ShipName', '').strip()
+                if ship_name and ship_name != '':
+                    vessel.name = ship_name
+
+                lat = meta.get('latitude', 0)
+                lon = meta.get('longitude', 0)
+                if lat and lon and lat != 91 and lon != 181:
+                    if vessel.lat != 0 and vessel.lon != 0:
+                        vessel.position_history.append({
+                            'lat': vessel.lat, 'lon': vessel.lon,
+                            'speed': vessel.speed, 'ts': vessel.last_update.isoformat(),
+                        })
+                        if len(vessel.position_history) > 50:
+                            vessel.position_history = vessel.position_history[-50:]
+                    vessel.lat = lat
+                    vessel.lon = lon
+
+                mid = mmsi[:3] if len(mmsi) >= 3 else ''
+                if mid:
+                    vessel.flag = _mid_to_flag(mid)
+
+                if msg_type == 'PositionReport':
+                    pos = msg.get('PositionReport', {})
+                    sog = pos.get('Sog', 0)
+                    if sog is not None and sog < 102.3:
+                        vessel.speed = sog
+                    cog = pos.get('Cog', 0)
+                    if cog is not None and cog < 360:
+                        vessel.course = cog
+                    hdg = pos.get('TrueHeading', 0)
+                    if hdg is not None and hdg < 360:
+                        vessel.heading = hdg
+                    nav = pos.get('NavigationalStatus', 15)
+                    vessel.nav_status = nav
+                    vessel.nav_status_text = NAV_STATUS_MAP.get(nav, f'Status {nav}')
+
+                elif msg_type == 'ShipStaticData':
+                    static = msg.get('ShipStaticData', {})
+                    name = static.get('Name', '').strip()
+                    if name:
+                        vessel.name = name
+                    cs = static.get('CallSign', '').strip()
+                    if cs:
+                        vessel.callsign = cs
+                    imo = static.get('ImoNumber', 0)
+                    if imo:
+                        vessel.imo = str(imo)
+                    vt = static.get('Type', 0)
+                    vessel.vessel_type = vt
+                    vessel.vessel_type_text = _get_vessel_type_text(vt)
+                    dest = static.get('Destination', '').strip()
+                    if dest:
+                        vessel.destination = dest
+                    eta = static.get('Eta', {})
+                    if eta:
+                        vessel.eta = f"{eta.get('Month',0):02d}-{eta.get('Day',0):02d} {eta.get('Hour',0):02d}:{eta.get('Minute',0):02d}"
+                    dr = static.get('MaximumStaticDraught', 0)
+                    if dr:
+                        vessel.draught = dr / 10.0
+                    dim = static.get('Dimension', {})
+                    if dim:
+                        vessel.length = (dim.get('A', 0) or 0) + (dim.get('B', 0) or 0)
+                        vessel.width = (dim.get('C', 0) or 0) + (dim.get('D', 0) or 0)
+
+                elif msg_type == 'StandardClassBCSPositionReport':
+                    pos = msg.get('StandardClassBCSPositionReport', {})
+                    sog = pos.get('Sog', 0)
+                    if sog is not None and sog < 102.3:
+                        vessel.speed = sog
+                    cog = pos.get('Cog', 0)
+                    if cog is not None and cog < 360:
+                        vessel.course = cog
+                    hdg = pos.get('TrueHeading', 0)
+                    if hdg is not None and hdg < 360:
+                        vessel.heading = hdg
+
+                self.stats['vessels_tracked'] = len(self.vessels)
+
+                self.vessels.move_to_end(mmsi)
+
+                return vessel
+
+        except KeyError as e:
+            self.stats['errors'] += 1
+            logger.warning(f'AISStream message missing field: {e}')
+            return None
+        except (ValueError, TypeError) as e:
+            self.stats['errors'] += 1
+            logger.warning(f'AISStream malformed message: {e}')
+            return None
+        except Exception as e:
+            self.stats['errors'] += 1
+            logger.error(f'AISStream parse error: {e}', exc_info=True)
+            return None
+
+    def start_websocket(self):
+        if not self.api_key:
+            logger.warning('AISStream API key not set — running in demo mode')
+            self.stats['connection_status'] = 'NO_API_KEY'
+            return False
+
+        if self._running:
+            return True
+
+        self._running = True
+        self.stats['start_time'] = datetime.now(timezone.utc).isoformat()
+        self._ws_thread = threading.Thread(target=self._ws_loop, daemon=True)
+        self._ws_thread.start()
+        return True
+
+    def _ws_loop(self):
+        try:
+            import websocket
+        except ImportError:
+            logger.error('websocket-client not installed')
+            self.stats['connection_status'] = 'MISSING_DEPENDENCY'
+            self._running = False
+            return
+
+        subscribe_msg = json.dumps({
+            'APIKey': self.api_key,
+            'BoundingBoxes': [self.bbox],
+            'FilterMessageTypes': ['PositionReport', 'ShipStaticData', 'StandardClassBCSPositionReport'],
+        })
+
+        attempt = 0
+        while self._running:
+            ws = None
+            try:
+                self.stats['connection_status'] = 'CONNECTING'
+                ws = websocket.create_connection(AISSTREAM_WS_URL, timeout=30)
+                self._ws = ws
+                ws.send(subscribe_msg)
+                self.stats['connection_status'] = 'CONNECTED'
+                attempt = 0
+                logger.info(f'AISStream connected — bbox: {self.bbox}')
+
+                while self._running:
+                    try:
+                        raw = ws.recv()
+                        if raw:
+                            self.process_aisstream_message(raw)
+                    except websocket.WebSocketTimeoutException:
+                        continue
+                    except websocket.WebSocketConnectionClosedException:
+                        break
+
+                    if time.time() - self._last_cleanup > 300:
+                        self._cleanup_stale()
+                        self._last_cleanup = time.time()
+
+            except Exception as e:
+                self.stats['errors'] += 1
+                self.stats['connection_status'] = 'RECONNECTING'
+                logger.error(f'AISStream connection error (attempt {attempt + 1}): {e}')
+            finally:
+                self._ws = None
+                if ws is not None:
+                    try:
+                        ws.close()
+                    except Exception:
+                        pass
+
+            if not self._running:
+                break
+            attempt += 1
+            delay = min(60.0, 2.0 ** min(attempt, 6)) + random.uniform(0.0, 1.0)
+            logger.info(f'AISStream reconnecting in {delay:.1f}s (attempt {attempt})')
+            # Sleep in 1-second slices so stop() reacts within ~1s.
+            slept = 0.0
+            while slept < delay and self._running:
+                time.sleep(min(1.0, delay - slept))
+                slept += 1.0
+
+        self.stats['connection_status'] = 'DISCONNECTED'
+
+    def _cleanup_stale(self):
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+        with self._lock:
+            stale = [k for k, v in self.vessels.items()
+                     if v.last_update and v.last_update < cutoff]
+            for k in stale:
+                del self.vessels[k]
+            self.stats['vessels_tracked'] = len(self.vessels)
+
+    def stop(self):
+        self._running = False
+        ws = self._ws
+        if ws is not None:
+            try:
+                ws.close()
+            except Exception:
+                pass
+        thread = self._ws_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=3.0)
+        self.stats['connection_status'] = 'DISCONNECTED'
+
+    def get_vessels(self, bbox=None, vessel_type=None, min_speed=None, flag=None, limit=500):
+        with self._lock:
+            result = []
+            for mmsi, v in reversed(list(self.vessels.items())):
+                if v.lat == 0 and v.lon == 0:
+                    continue
+                if bbox:
+                    if not (bbox[0][0] <= v.lat <= bbox[1][0] and bbox[0][1] <= v.lon <= bbox[1][1]):
+                        continue
+                if vessel_type is not None and v.vessel_type != vessel_type:
+                    continue
+                if min_speed is not None and v.speed < min_speed:
+                    continue
+                if flag and v.flag != flag.upper():
+                    continue
+
+                result.append(_vessel_to_dict(v))
+                if len(result) >= limit:
+                    break
+            return result
+
+    def get_vessel(self, mmsi):
+        mmsi = str(mmsi)
+        with self._lock:
+            v = self.vessels.get(mmsi)
+            if v:
+                d = _vessel_to_dict(v)
+                d['position_history'] = v.position_history[-50:]
+                return d
+            return None
+
+    def get_stats(self):
+        with self._lock:
+            return dict(self.stats)
+
+    def get_heatmap_data(self, bbox=None):
+        with self._lock:
+            points = []
+            for mmsi, v in self.vessels.items():
+                if v.lat == 0 and v.lon == 0:
+                    continue
+                if bbox:
+                    if not (bbox[0][0] <= v.lat <= bbox[1][0] and bbox[0][1] <= v.lon <= bbox[1][1]):
+                        continue
+                points.append([v.lat, v.lon, max(0.3, min(1.0, v.speed / 15.0))])
+            return points
+
+    def get_vessel_counts_by_type(self):
+        with self._lock:
+            counts = {}
+            for v in self.vessels.values():
+                t = v.vessel_type_text or 'Desconocido'
+                counts[t] = counts.get(t, 0) + 1
+            return sorted(counts.items(), key=lambda x: x[1], reverse=True)
+
+    def get_vessel_counts_by_flag(self):
+        with self._lock:
+            counts = {}
+            for v in self.vessels.values():
+                f = v.flag or '??'
+                counts[f] = counts.get(f, 0) + 1
+            return sorted(counts.items(), key=lambda x: x[1], reverse=True)
+
+
+def _vessel_to_dict(v):
+    return {
+        'mmsi': v.mmsi,
+        'name': v.name or f'MMSI-{v.mmsi}',
+        'callsign': v.callsign,
+        'imo': v.imo,
+        'vessel_type': v.vessel_type,
+        'vessel_type_text': v.vessel_type_text or _get_vessel_type_text(v.vessel_type),
+        'lat': round(v.lat, 6),
+        'lon': round(v.lon, 6),
+        'speed': round(v.speed, 1),
+        'course': round(v.course, 1),
+        'heading': round(v.heading, 1),
+        'nav_status': v.nav_status,
+        'nav_status_text': v.nav_status_text,
+        'destination': v.destination,
+        'eta': v.eta,
+        'draught': v.draught,
+        'length': v.length,
+        'width': v.width,
+        'flag': v.flag,
+        'last_update': v.last_update.isoformat() if v.last_update else None,
+        'msg_count': v.msg_count,
+    }
+
+
+def _get_vessel_type_text(vtype):
+    if vtype in VESSEL_TYPE_MAP:
+        return VESSEL_TYPE_MAP[vtype]
+    if 20 <= vtype <= 29:
+        return 'Wing in ground'
+    if 40 <= vtype <= 49:
+        return 'Alta velocidad'
+    if 60 <= vtype <= 69:
+        return 'Pasajeros'
+    if 70 <= vtype <= 79:
+        return 'Carga'
+    if 80 <= vtype <= 89:
+        return 'Tanquero'
+    if 90 <= vtype <= 99:
+        return 'Otro'
+    return 'Desconocido'
+
+
+MID_TO_FLAG = {
+    '201': 'ALB', '202': 'AND', '203': 'AUT', '204': 'PRT', '205': 'BEL',
+    '206': 'BLR', '207': 'BGR', '208': 'VAT', '209': 'CYP', '210': 'CYP',
+    '211': 'DEU', '212': 'CYP', '213': 'GEO', '214': 'MDA', '215': 'MLT',
+    '216': 'ARM', '218': 'DEU', '219': 'DNK', '220': 'DNK', '224': 'ESP',
+    '225': 'ESP', '226': 'FRA', '227': 'FRA', '228': 'FRA', '229': 'MLT',
+    '230': 'FIN', '231': 'FRO', '232': 'GBR', '233': 'GBR', '234': 'GBR',
+    '235': 'GBR', '236': 'GIB', '237': 'GRC', '238': 'HRV', '239': 'GRC',
+    '240': 'GRC', '241': 'GRC', '242': 'MAR', '243': 'HUN', '244': 'NLD',
+    '245': 'NLD', '246': 'NLD', '247': 'ITA', '248': 'MLT', '249': 'MLT',
+    '250': 'IRL', '251': 'ISL', '252': 'LIE', '253': 'LUX', '254': 'MCO',

@@ -1,0 +1,76 @@
+Y con esto ? #include <jni.h>
+#include <cstdint>
+#include <vector>
+
+extern "C" {
+    // Rust FFI declarations
+    struct Engine;
+    Engine* engine_create(size_t n);
+    void engine_set_synapses(
+        Engine* engine,
+        const size_t* row_ptrs, size_t row_ptrs_len,
+        const size_t* col_indices, size_t col_indices_len,
+        const float* weights, size_t weights_len
+    );
+    uint32_t engine_step(Engine* engine, float stim_str);
+    void engine_destroy(Engine* engine);
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_edge_neuromorphic_NeuromorphicEngine_nativeCreate(JNIEnv *env, jclass clazz, jint n) {
+    Engine* ptr = engine_create(static_cast<size_t>(n));
+    return reinterpret_cast<jlong>(ptr);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_edge_neuromorphic_NeuromorphicEngine_nativeSetSynapses(JNIEnv *env, jclass clazz, jlong ptr, jlongArray rowPtrs, jlongArray colIndices, jfloatArray weights) {
+    Engine* engine = reinterpret_cast<Engine*>(ptr);
+    if (!engine) return;
+
+    jsize rowPtrsLen = env->GetArrayLength(rowPtrs);
+    jlong* rowPtrsElements = env->GetLongArrayElements(rowPtrs, nullptr);
+
+    jsize colIndicesLen = env->GetArrayLength(colIndices);
+    jlong* colIndicesElements = env->GetLongArrayElements(colIndices, nullptr);
+
+    jsize weightsLen = env->GetArrayLength(weights);
+    jfloat* weightsElements = env->GetFloatArrayElements(weights, nullptr);
+
+    // Fix: Safely copy and cast jlong (64-bit) to size_t to prevent bugs on 32-bit platforms
+    std::vector<size_t> rowPtrsVec(rowPtrsLen);
+    for (jsize i = 0; i < rowPtrsLen; ++i) {
+        rowPtrsVec[i] = static_cast<size_t>(rowPtrsElements[i]);
+    }
+
+    std::vector<size_t> colIndicesVec(colIndicesLen);
+    for (jsize i = 0; i < colIndicesLen; ++i) {
+        colIndicesVec[i] = static_cast<size_t>(colIndicesElements[i]);
+    }
+
+    engine_set_synapses(
+        engine,
+        rowPtrsVec.data(), static_cast<size_t>(rowPtrsLen),
+        colIndicesVec.data(), static_cast<size_t>(colIndicesLen),
+        reinterpret_cast<const float*>(weightsElements), static_cast<size_t>(weightsLen)
+    );
+
+    env->ReleaseLongArrayElements(rowPtrs, rowPtrsElements, JNI_ABORT);
+    env->ReleaseLongArrayElements(colIndices, colIndicesElements, JNI_ABORT);
+    env->ReleaseFloatArrayElements(weights, weightsElements, JNI_ABORT);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_edge_neuromorphic_NeuromorphicEngine_nativeStep(JNIEnv *env, jclass clazz, jlong ptr, jfloat stimStr) {
+    Engine* engine = reinterpret_cast<Engine*>(ptr);
+    if (!engine) return 0;
+
+    return static_cast<jint>(engine_step(engine, stimStr));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_edge_neuromorphic_NeuromorphicEngine_nativeDestroy(JNIEnv *env, jclass clazz, jlong ptr) {
+    Engine* engine = reinterpret_cast<Engine*>(ptr);
+    if (engine) {
+        engine_destroy(engine);
+    }
+}

@@ -1,0 +1,281 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// VigesimalCodec Pro v2 — Base-N Vertex Compression (HPC Edition refactor)
+// Refactor production-ready: Zero-GC real, LUT cacheado con invalidación,
+// validación de buffers, fast-math bitwise, soporte 3D bbox por eje.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const MAYA_LEVELS = 20;
+
+export class VigesimalCodec {
+  // ── Encapsulación real ES2022 (no leak runtime como `private` TS) ────────
+  #levels;
+  #maxLevel;
+  #lut;             // Float32Array cacheado de descompresión
+  #lutRangeCached;  // Sentinel: range con el que se construyó el LUT (NaN = sin caché)
+  #scratchU8;       // Buffer scratch interno para stats() (Zero-GC)
+  #scratchF32;      // Buffer scratch interno para stats() (Zero-GC)
+  #lutX; #lutY; #lutZ;       // 3D LUTs cacheados por axis (Zero-GC real)
+  #lut3DRxCached; #lut3DRyCached; #lut3DRzCached;
+
+  constructor(levels = MAYA_LEVELS) {
+    // Clamp inicial: 2..65536 (permite Uint8 hasta 256 y Uint16 hasta 65536)
+    levels = (levels | 0);
+    if (levels < 2) levels = 2;
+    if (levels > 65536) levels = 65536;
+    this.#levels = levels;
+    this.#maxLevel = levels - 1;
+    this.#lut = new Float32Array(levels);   // Pre-asignado UNA vez
+    this.#lutRangeCached = NaN;             // Forzar primera construcción
+    this.#scratchU8 = null;                 // Lazy alloc en stats()
+    this.#scratchF32 = null;
+    this.#lutX = new Float32Array(levels);
+    this.#lutY = new Float32Array(levels);
+    this.#lutZ = new Float32Array(levels);
+    this.#lut3DRxCached = NaN;
+    this.#lut3DRyCached = NaN;
+    this.#lut3DRzCached = NaN;
+  }
+
+  get levels()   { return this.#levels; }
+  get maxLevel() { return this.#maxLevel; }
+  /** ¿Necesita Uint16Array para indexar? (levels > 256) */
+  get wide()     { return this.#levels > 256; }
+
+  // ── COMPRESS ──────────────────────────────────────────────────────────────
+  /**
+   * Comprime vertices float → enteros Base-N.
+   * @param {Float32Array} vertices - Datos crudos.
+   * @param {number} range - Rango simétrico (-range..+range).
+   * @param {Uint8Array|Uint16Array} [out] - Buffer destino reutilizable.
+   * @returns {Uint8Array|Uint16Array}
+   */
+  compress(vertices, range, out) {
+    const N = vertices.length;
+    const maxL = this.#maxLevel;
+    const wide = this.wide;
+
+    // Validación estricta del buffer out (V3 fix)
+    let dst;
+    if (out) {
+      if (out.length < N) {
+        throw new RangeError(`out buffer too small: ${out.length} < ${N}`);
+      }
+      // Verificar tipo correcto según rango de levels
+      if (wide && !(out instanceof Uint16Array)) {
+        throw new TypeError('levels > 256 requires Uint16Array out buffer');
+      }
+      if (!wide && !(out instanceof Uint8Array)) {
+        throw new TypeError('levels <= 256 requires Uint8Array out buffer');
+      }
+      dst = out;
+    } else {
+      dst = wide ? new Uint16Array(N) : new Uint8Array(N);
+    }
+
+    if (range <= 0 || !Number.isFinite(range)) {
+      throw new RangeError(`range must be positive finite, got ${range}`);
+    }
+
+    // Pre-cómputo: multiplicación es ~3x más rápida que división en x86_64
+    const invRange = 1.0 / (2.0 * range);
+
+    // Loop monomórfico: V8 elimina bounds-checks en TypedArray.length tightloop
+    for (let i = 0; i < N; i++) {
+      // Normalizar a [0..1] usando solo multiplicación
+      let norm = (vertices[i] + range) * invRange;
+
+      // Branchless clamp via Math.min/max (TurboFan emite minsd/maxsd, no salta)
+      norm = Math.min(Math.max(norm, 0.0), 1.0);
+
+      // Fast bitwise round-to-nearest: (x + 0.5) | 0 es cvttsd2si en x86_64
+      // Solo válido para positivos (lo garantiza el clamp anterior)
+      dst[i] = (norm * maxL + 0.5) | 0;
+    }
+    return dst;
+  }
+
+  // ── DECOMPRESS ────────────────────────────────────────────────────────────
+  /**
+   * Descomprime via LUT cacheado O(N) puro acceso a memoria.
+   * El LUT se reconstruye SOLO si cambia `range` (V1 fix — Zero-GC real).
+   */
+  decompress(compressed, range, out) {
+    const N = compressed.length;
+    if (range <= 0 || !Number.isFinite(range)) {
+      throw new RangeError(`range must be positive finite, got ${range}`);
+    }
+
+    // Validación de out (V3 fix)
+    let dst;
+    if (out) {
+      if (!(out instanceof Float32Array)) {
+        throw new TypeError('out must be Float32Array');
+      }
+      if (out.length < N) {
+        throw new RangeError(`out buffer too small: ${out.length} < ${N}`);
+      }
+      dst = out;
+    } else {
+      dst = new Float32Array(N);
+    }
+
+    // Reconstruir LUT SOLO si range cambió (V1+V4 fix)
+    if (range !== this.#lutRangeCached) {
+      this.#rebuildLUT(range);
+    }
+    const lut = this.#lut;
+
+    // Hot loop: pura lectura de memoria, sin matemática.
+    // `compressed[i]` es el índice directo → cache-friendly si N < L1.
+    for (let i = 0; i < N; i++) {
+      dst[i] = lut[compressed[i]];
+    }
+    return dst;
+  }
+
+  // ── 3D-aware compress: bbox independiente por eje ────────────────────────
+  /**
+   * Comprime un mesh interleaved [x,y,z,x,y,z,...] usando rangos por eje.
+   * Aprovecha mejor el espacio de 5 bits cuando los ejes son anisotrópicos.
+   * @param {Float32Array} mesh - Vertices interleaved (length % 3 === 0).
+   * @param {[number,number,number]} ranges - [rx, ry, rz] simétricos.
+   * @param {Uint8Array|Uint16Array} [out]
+   */
+  compressMesh3D(mesh, ranges, out) {
+    const N = mesh.length;
+    if ((N % 3) !== 0) throw new RangeError('mesh length must be multiple of 3');
+    const wide = this.wide;
+    const dst = out || (wide ? new Uint16Array(N) : new Uint8Array(N));
+    if (dst.length < N) throw new RangeError('out too small');
+
+    const maxL = this.#maxLevel;
+    const [rx, ry, rz] = ranges;
+    if (!(rx > 0 && ry > 0 && rz > 0)) throw new RangeError('all ranges must be > 0');
+
+    const invX = 1.0 / (2.0 * rx);
+    const invY = 1.0 / (2.0 * ry);
+    const invZ = 1.0 / (2.0 * rz);
+
+    // Strided por 3 (cache-friendly: 12 bytes input → 3 bytes output por vertex)
+    for (let i = 0; i < N; i += 3) {
+      let nx = (mesh[i]   + rx) * invX;
+      let ny = (mesh[i+1] + ry) * invY;
+      let nz = (mesh[i+2] + rz) * invZ;
+      nx = Math.min(Math.max(nx, 0.0), 1.0);
+      ny = Math.min(Math.max(ny, 0.0), 1.0);
+      nz = Math.min(Math.max(nz, 0.0), 1.0);
+      dst[i]   = (nx * maxL + 0.5) | 0;
+      dst[i+1] = (ny * maxL + 0.5) | 0;
+      dst[i+2] = (nz * maxL + 0.5) | 0;
+    }
+    return dst;
+  }
+
+  /** Descompresión 3D con LUTs separados por eje (cacheados internamente). */
+  decompressMesh3D(compressed, ranges, out) {
+    const N = compressed.length;
+    if ((N % 3) !== 0) throw new RangeError('compressed length must be multiple of 3');
+    const dst = out || new Float32Array(N);
+    if (dst.length < N) throw new RangeError('out too small');
+
+    const [rx, ry, rz] = ranges;
+    // 3 LUTs cacheados por axis (Zero-GC real — solo reconstruye si cambia el range del eje)
+    const maxL = this.#maxLevel;
+    const lutX = this.#lutX, lutY = this.#lutY, lutZ = this.#lutZ;
+    if (rx !== this.#lut3DRxCached) {
+      const sx = (2.0 * rx) / maxL;
+      for (let i = 0; i <= maxL; i++) lutX[i] = i * sx - rx;
+      this.#lut3DRxCached = rx;
+    }
+    if (ry !== this.#lut3DRyCached) {
+      const sy = (2.0 * ry) / maxL;
+      for (let i = 0; i <= maxL; i++) lutY[i] = i * sy - ry;
+      this.#lut3DRyCached = ry;
+    }
+    if (rz !== this.#lut3DRzCached) {
+      const sz = (2.0 * rz) / maxL;
+      for (let i = 0; i <= maxL; i++) lutZ[i] = i * sz - rz;
+      this.#lut3DRzCached = rz;
+    }
+    for (let i = 0; i < N; i += 3) {
+      dst[i]   = lutX[compressed[i]];
+      dst[i+1] = lutY[compressed[i+1]];
+      dst[i+2] = lutZ[compressed[i+2]];
+    }
+    return dst;
+  }
+
+  // ── STATS ─────────────────────────────────────────────────────────────────
+  /**
+   * Telemetría de calidad SIN alocar buffers nuevos (V2 fix).
+   * Reutiliza scratch interno; primera llamada inicializa, siguientes Zero-GC.
+   */
+  stats(original, range) {
+    const N = original.length;
+    const wide = this.wide;
+
+    // Scratch lazy + redimensionar solo si crece
+    if (!this.#scratchU8 || this.#scratchU8.length < N) {
+      this.#scratchU8 = wide ? new Uint16Array(N) : new Uint8Array(N);
+    }
+    if (!this.#scratchF32 || this.#scratchF32.length < N) {
+      this.#scratchF32 = new Float32Array(N);
+    }
+    const compressed = this.#scratchU8;
+    const restored = this.#scratchF32;
+
+    this.compress(original, range, compressed);
+    this.decompress(compressed, range, restored);
+
+    let maxErr = 0;
+    let sumErr = 0;
+    // Inline abs (1 ciclo determinista, evita call frame de Math.abs)
+    for (let i = 0; i < N; i++) {
+      const d = original[i] - restored[i];
+      const e = d < 0 ? -d : d;
+      if (e > maxErr) maxErr = e;
+      sumErr += e;
+    }
+
+    const bytesPerSample = wide ? 2 : 1;
+    return {
+      compressionRatio: original.byteLength / (N * bytesPerSample),
+      maxError: maxErr,
+      meanError: sumErr / N,
+      bytesOriginal: original.byteLength,
+      bytesCompressed: N * bytesPerSample,
+      theoreticalQuantStep: (2 * range) / this.#maxLevel,
+    };
+  }
+
+  // ── LUT lifecycle ────────────────────────────────────────────────────────
+  /** Reconstruye el LUT en el buffer pre-asignado (in-place). */
+  #rebuildLUT(range) {
+    const lut = this.#lut;
+    const maxL = this.#maxLevel;
+    const scale = (2.0 * range) / maxL;
+    for (let i = 0; i <= maxL; i++) {
+      lut[i] = i * scale - range;
+    }
+    this.#lutRangeCached = range;
+  }
+
+  /** Invalida el LUT manualmente (útil cuando el `range` global cambia). */
+  invalidateLUT() {
+    this.#lutRangeCached = NaN;
+  }
+
+  // ── WebGPU/WGSL hint ─────────────────────────────────────────────────────
+  /**
+   * Devuelve un snippet WGSL para descompresión en el Vertex Shader.
+   * Mete el LUT como uniform → ahorra ancho de banda PCIe (4x menos datos al GPU).
+   */
+  wgslDecompressionSnippet(varName = 'vigLUT') {
+    const lines = [`@group(0) @binding(0) var<uniform> ${varName}: array<f32, ${this.#levels}>;`];
+    lines.push(`fn vigDecode(idx: u32) -> f32 { return ${varName}[idx]; }`);
+    return lines.join('\n');
+  }
+}
+
+// ── Convenience: instancia singleton para casos simples ─────────────────────
+export const codecMaya = new VigesimalCodec(MAYA_LEVELS);
