@@ -1,6 +1,6 @@
 import {
   View, Text, Pressable, StyleSheet, ScrollView, Platform,
-  Alert, ActivityIndicator, Linking,
+  Alert, ActivityIndicator, Linking, Modal,
 } from "react-native";
 import { useState, useCallback, useRef } from "react";
 import { router } from "expo-router";
@@ -15,6 +15,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useAuth } from "@/lib/auth-context";
+import { useSubscription } from "@/lib/revenuecat";
 import { t } from "@/lib/i18n";
 import { apiRequest } from "@/lib/query-client";
 
@@ -126,14 +127,24 @@ function PlanCard({
 
 export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
-  const { user, upgradeToPremium, checkSubscriptionStatus } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<Plan>("quarterly");
+  const { user, upgradeToPremium } = useAuth();
+  const { packages, purchase, restore, isPurchasing, isRestoring, isSubscribed } = useSubscription();
+  const [selectedPlan, setSelectedPlan] = useState<Plan>("annual");
   const [cryptoToken, setCryptoToken] = useState<CryptoToken>("usdc");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSolanaProcessing, setIsSolanaProcessing] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingPkg, setPendingPkg] = useState<any>(null);
   const solanaPollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canPayWithPhantom = selectedPlan === "lifetime" || selectedPlan === "quarterly";
+
+  const getPackageForPlan = useCallback((plan: Plan) => {
+    if (plan === "monthly" || plan === "quarterly") return packages.monthly;
+    if (plan === "annual") return packages.annual;
+    if (plan === "lifetime") return packages.lifetime;
+    return null;
+  }, [packages]);
 
   const handlePurchase = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -142,49 +153,64 @@ export default function PremiumScreen() {
       router.push("/(auth)/login");
       return;
     }
+    const pkg = getPackageForPlan(selectedPlan);
+    if (!pkg) {
+      showAlert("", "Plan no disponible. Intenta de nuevo.");
+      return;
+    }
+    // En modo dev mostramos confirmación antes de cobrar
+    if (__DEV__) {
+      setPendingPkg(pkg);
+      setShowConfirm(true);
+      return;
+    }
     setIsProcessing(true);
     try {
-      const lsPlan = selectedPlan === "quarterly" ? "monthly" : selectedPlan;
-      const res = await apiRequest("GET", `/api/checkout/url?plan=${lsPlan}&userId=${encodeURIComponent(user.id)}`);
-      const data = await res.json();
-      if (!data.checkoutUrl) throw new Error("No checkout URL");
-
-      await WebBrowser.openBrowserAsync(data.checkoutUrl, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
-      });
-
-      let attempts = 0;
-      const checkPayment = async () => {
-        const isPremium = await checkSubscriptionStatus();
-        if (isPremium) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setIsProcessing(false);
-          router.back();
-          return;
-        }
-        attempts++;
-        if (attempts < 6) {
-          setTimeout(checkPayment, 3000);
-        } else {
-          setIsProcessing(false);
-          if (Platform.OS === "web") {
-            const confirmed = confirm(t("premium.confirmWeb"));
-            if (confirmed) { await upgradeToPremium(); router.back(); }
-          } else {
-            Alert.alert(t("premium.alertTitle"), t("premium.alertMessage"), [
-              { text: t("premium.no"), style: "cancel" },
-              { text: t("premium.yes"), onPress: async () => { await upgradeToPremium(); router.back(); } },
-            ]);
-          }
-        }
-      };
-      setTimeout(checkPayment, 2000);
-    } catch (e) {
-      console.error("Purchase error:", e);
+      await purchase(pkg);
+      await upgradeToPremium();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (e: any) {
+      if (!e?.userCancelled) {
+        console.error("Purchase error:", e);
+        showAlert("", t("premium.error"));
+      }
+    } finally {
       setIsProcessing(false);
+    }
+  }, [user, selectedPlan, getPackageForPlan, purchase, upgradeToPremium]);
+
+  const confirmDevPurchase = useCallback(async () => {
+    setShowConfirm(false);
+    if (!pendingPkg) return;
+    setIsProcessing(true);
+    try {
+      await purchase(pendingPkg);
+      await upgradeToPremium();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (e: any) {
+      if (!e?.userCancelled) showAlert("", t("premium.error"));
+    } finally {
+      setIsProcessing(false);
+      setPendingPkg(null);
+    }
+  }, [pendingPkg, purchase, upgradeToPremium]);
+
+  const handleRestore = useCallback(async () => {
+    try {
+      await restore();
+      if (isSubscribed) {
+        await upgradeToPremium();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      } else {
+        showAlert("", "No se encontraron compras anteriores.");
+      }
+    } catch (e) {
       showAlert("", t("premium.error"));
     }
-  }, [user, selectedPlan, checkSubscriptionStatus, upgradeToPremium]);
+  }, [restore, isSubscribed, upgradeToPremium]);
 
   const handlePhantomPay = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -262,10 +288,12 @@ export default function PremiumScreen() {
   };
 
   const getMainButtonLabel = () => {
-    if (selectedPlan === "lifetime") return `${t("premium.buyLifetime")}  $14.99`;
-    if (selectedPlan === "quarterly") return `${t("premium.buy3Months")}  $4.99`;
-    if (selectedPlan === "annual") return `${t("premium.subscribe")}  $9.99/yr`;
-    return `${t("premium.subscribe")}  $1.99/mo`;
+    const pkg = getPackageForPlan(selectedPlan);
+    const price = pkg?.product?.priceString;
+    if (selectedPlan === "lifetime") return `${t("premium.buyLifetime")}  ${price ?? "$14.99"}`;
+    if (selectedPlan === "quarterly") return `${t("premium.buy3Months")}  ${price ?? "$4.99"}`;
+    if (selectedPlan === "annual") return `${t("premium.subscribe")}  ${price ?? "$9.99"}/yr`;
+    return `${t("premium.subscribe")}  ${price ?? "$1.99"}/mo`;
   };
 
   const ctaGradientColors = (): [string, string] => {
@@ -397,6 +425,29 @@ export default function PremiumScreen() {
           </View>
         </View>
 
+        {/* ===== MODAL CONFIRMACIÓN DEV ===== */}
+        <Modal visible={showConfirm} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>Confirmar compra (Test)</Text>
+              <Text style={styles.modalBody}>
+                {pendingPkg?.product?.title}{"\n"}
+                <Text style={{ color: ACCENT, fontWeight: "700" }}>
+                  {pendingPkg?.product?.priceString}
+                </Text>
+              </Text>
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancel} onPress={() => setShowConfirm(false)}>
+                  <Text style={{ color: TEXT_SECONDARY, fontWeight: "600" }}>Cancelar</Text>
+                </Pressable>
+                <Pressable style={styles.modalConfirm} onPress={confirmDevPurchase}>
+                  <Text style={{ color: "#000", fontWeight: "700" }}>Comprar</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* ===== CTA ===== */}
         {user?.isPremium ? (
           <View style={styles.activeBadge}>
@@ -407,7 +458,7 @@ export default function PremiumScreen() {
           <>
             <PressableScale
               onPress={handlePurchase}
-              disabled={isProcessing || isSolanaProcessing}
+              disabled={isProcessing || isSolanaProcessing || isPurchasing}
               style={styles.ctaWrap}
             >
               <LinearGradient
@@ -517,6 +568,16 @@ export default function PremiumScreen() {
             ? t("premium.disclaimerQuarterly")
             : t("premium.disclaimer")}
         </Text>
+
+        {/* Restaurar compras */}
+        {!user?.isPremium && (
+          <Pressable onPress={handleRestore} disabled={isRestoring} style={styles.restoreBtn}>
+            {isRestoring
+              ? <ActivityIndicator size="small" color={TEXT_DIM} />
+              : <Text style={styles.restoreText}>Restaurar compras anteriores</Text>
+            }
+          </Pressable>
+        )}
       </ScrollView>
     </View>
   );
@@ -891,5 +952,63 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 18,
     lineHeight: 15,
+  },
+  restoreBtn: {
+    alignItems: "center",
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  restoreText: {
+    fontSize: 12,
+    color: TEXT_DIM,
+    textDecorationLine: "underline" as const,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalBox: {
+    backgroundColor: SURFACE_ELEVATED,
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: BORDER,
+    gap: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: TEXT_PRIMARY,
+    textAlign: "center",
+  },
+  modalBody: {
+    fontSize: 14,
+    color: TEXT_SECONDARY,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  modalCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+  },
+  modalConfirm: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: ACCENT,
+    alignItems: "center",
   },
 });

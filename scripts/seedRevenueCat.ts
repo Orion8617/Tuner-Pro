@@ -77,6 +77,7 @@ const PRODUCTS = [
       { amount_micros: 14990000, currency: "USD" },
       { amount_micros: 14990000, currency: "EUR" },
     ],
+    skipPlayStore: true,
   },
 ];
 
@@ -203,7 +204,13 @@ async function seedRevenueCat() {
   for (const prod of PRODUCTS) {
     const testProd = await ensureProduct(client, project, testApp, `Test:${prod.identifier}`, prod.identifier, prod.displayName, prod.title, prod.duration, true, existingProducts);
     const iosProd = await ensureProduct(client, project, appStoreApp, `iOS:${prod.identifier}`, prod.identifier, prod.displayName, prod.title, prod.duration, false, existingProducts);
-    const androidProd = await ensureProduct(client, project, playStoreApp, `Android:${prod.identifier}`, prod.playStoreIdentifier, prod.displayName, prod.title, prod.duration, false, existingProducts);
+
+    let androidProd: Product | undefined;
+    if (!prod.skipPlayStore) {
+      androidProd = await ensureProduct(client, project, playStoreApp, `Android:${prod.identifier}`, prod.playStoreIdentifier, prod.displayName, prod.title, prod.duration, false, existingProducts);
+    } else {
+      console.log(`Skipping Play Store for ${prod.identifier} (lifetime/one-time)`);
+    }
 
     // Test store prices
     const { error: priceError } = await client.post<TestStorePricesResponse>({
@@ -221,7 +228,7 @@ async function seedRevenueCat() {
       console.log(`Added test store prices for ${prod.identifier}`);
     }
 
-    allProductIds.push(testProd.id, iosProd.id, androidProd.id);
+    allProductIds.push(testProd.id, iosProd.id, ...(androidProd ? [androidProd.id] : []));
   }
 
   // ── Entitlement ───────────────────────────────────────────────────────────
@@ -324,19 +331,19 @@ async function seedRevenueCat() {
     });
     const testProdObj = allProds?.items?.find((p) => p.store_identifier === prod.identifier && p.app_id === testApp!.id);
     const iosProdObj = allProds?.items?.find((p) => p.store_identifier === prod.identifier && p.app_id === appStoreApp!.id);
-    const androidProdObj = allProds?.items?.find((p) => p.store_identifier === prod.playStoreIdentifier && p.app_id === playStoreApp!.id);
+    const androidProdObj = prod.skipPlayStore ? undefined : allProds?.items?.find((p) => p.store_identifier === prod.playStoreIdentifier && p.app_id === playStoreApp!.id);
 
-    if (testProdObj && iosProdObj && androidProdObj) {
+    if (testProdObj && iosProdObj) {
+      const productsToAttach: { product_id: string; eligibility_criteria: "all" }[] = [
+        { product_id: testProdObj.id, eligibility_criteria: "all" },
+        { product_id: iosProdObj.id, eligibility_criteria: "all" },
+      ];
+      if (androidProdObj) productsToAttach.push({ product_id: androidProdObj.id, eligibility_criteria: "all" });
+
       const { error: attachPkgErr } = await attachProductsToPackage({
         client,
         path: { project_id: project.id, package_id: pkg.id },
-        body: {
-          products: [
-            { product_id: testProdObj.id, eligibility_criteria: "all" },
-            { product_id: iosProdObj.id, eligibility_criteria: "all" },
-            { product_id: androidProdObj.id, eligibility_criteria: "all" },
-          ],
-        },
+        body: { products: productsToAttach },
       });
       if (attachPkgErr && !attachPkgErr.message?.includes("Cannot attach product")) {
         console.warn(`Package attach warning for ${prod.packageKey}:`, JSON.stringify(attachPkgErr));
