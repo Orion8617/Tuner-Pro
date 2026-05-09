@@ -1,0 +1,1076 @@
+Mira te pongo esta otra parte que creo que van juntas y me vuelves a explicame porque no lei lo que me escribiste asi que me lo escribes otra ves pero ya explicando las 2 partes ! use wasm_bindgen::prelude::*;
+use serde::{Serialize, Deserialize};
+use std::f64::consts::PI;
+
+pub mod maya_isa;
+
+const DEG2RAD: f64 = PI / 180.0;
+const M_PER_DEG: f64 = 111320.0;
+const VIG_LEVELS: u32 = 20;
+const Q6_MAX: u32 = 63;
+const HIST_SIZE: usize = 5;
+const ARC_LEN: f64 = 50.3;
+
+const MAX_TOWERS: usize = 8;
+const GN_MAX_ITER: usize = 40;
+const IRLS_MAX_ITER: usize = 5;
+const MULTI_START: usize = 10;
+const TUKEY_C: f64 = 4.685;
+const SCHUMANN_F0: f64 = 7.83;
+const SCHUMANN_HARMONICS: [f64; 5] = [7.83, 14.3, 20.8, 27.3, 33.8];
+const SCHUMANN_LAMBDA: f64 = 299792458.0 / SCHUMANN_F0;
+const SCHUMANN_COUPLING: f64 = 0.35;
+const SCHUMANN_DECAY: f64 = 0.0001;
+
+const EARTH_RADIUS_M: f64 = 6_371_000.0;
+const IONOSPHERE_H_KM: f64 = 75.0;
+const IONOSPHERE_H_M: f64 = 75_000.0;
+const C_LIGHT: f64 = 299_792_458.0;
+const ELF_ATTENUATION_DB_MM: f64 = 1.0;
+const ELF_CONDUCTIVITY_GROUND: f64 = 0.001;
+const ELF_CONDUCTIVITY_SEA: f64 = 4.0;
+const ELF_EPSILON_R: f64 = 80.0;
+const WAVEGUIDE_MODES: usize = 3;
+const HONDURAS_LAT_CENTER: f64 = 14.5;
+const HONDURAS_LNG_CENTER: f64 = -87.0;
+const HONDURAS_GEOMAG_DIP_DEG: f64 = 42.0;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = performance, js_name = now)]
+    fn performance_now() -> f64;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Tower {
+    pub id: String,
+    pub lat: f64,
+    pub lng: f64,
+    pub range_km: f64,
+    pub power_dbm: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BakeIn {
+    pub cos_lat: f64,
+    pub sin_lat: f64,
+    pub m_per_lng: f64,
+    pub center_lat: f64,
+    pub center_lng: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TowerDistance {
+    pub tower_id: String,
+    pub distance_m: f64,
+    pub radius_m: f64,
+    pub vig_level: u32,
+    pub vig_category: String,
+    pub q6_signal: u32,
+    pub tower_lat: f64,
+    pub tower_lng: f64,
+    pub weight: f64,
+    pub quality_gate: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TriangulationResult {
+    pub lat: f64,
+    pub lng: f64,
+    pub confidence: f64,
+    pub pascal_confidence: f64,
+    pub accuracy_meters: f64,
+    pub gdop: f64,
+    pub tower_distances: Vec<TowerDistance>,
+    pub bake_in: BakeIn,
+    pub pascal_weights: Vec<f64>,
+    pub computation_ms: f64,
+    pub solver: String,
+    pub towers_used: usize,
+    pub irls_iterations: usize,
+    pub gn_iterations: usize,
+    pub motif: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PingResult {
+    pub latency_ms: f64,
+    pub estimated_distance_km: f64,
+    pub q6_latency: u32,
+    pub vig_distance: u32,
+    pub confidence_adjustment: f64,
+    pub timing: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SNNState {
+    pub reactivo_q6: u32,
+    pub analitico_q6: u32,
+    pub pascal_q6: u32,
+    pub temporal_q6: u32,
+    pub ambiental_q6: u32,
+    pub neat_gen: u32,
+    pub reactivo_pct: f64,
+    pub analitico_pct: f64,
+    pub pascal_pct: f64,
+    pub temporal_pct: f64,
+    pub ambiental_pct: f64,
+    pub arms_active: u32,
+    pub dominant_arm: String,
+}
+
+static mut PASCAL_CACHE: Option<Vec<(usize, Vec<f64>)>> = None;
+static mut INTENSITY_HISTORY: Option<Vec<Vec<f64>>> = None;
+static mut NEAT_GEN: u32 = 0;
+
+fn get_pascal(n: usize) -> Vec<f64> {
+    unsafe {
+        if PASCAL_CACHE.is_none() {
+            PASCAL_CACHE = Some(Vec::new());
+        }
+        let cache = PASCAL_CACHE.as_ref().unwrap();
+        for (k, row) in cache.iter() {
+            if *k == n { return row.clone(); }
+        }
+    }
+    let mut row: Vec<f64> = vec![1.0];
+    for _ in 1..=n {
+        let mut nx = vec![1.0];
+        for j in 1..row.len() {
+            nx.push(row[j-1] + row[j]);
+        }
+        nx.push(1.0);
+        row = nx;
+    }
+    let s: f64 = row.iter().sum();
+    let normalized: Vec<f64> = row.iter().map(|v| v / s).collect();
+    unsafe {
+        if let Some(cache) = PASCAL_CACHE.as_mut() {
+            cache.push((n, normalized.clone()));
+        }
+    }
+    normalized
+}
+
+fn quant_vig(value: f64, min: f64, max: f64) -> u32 {
+    if (max - min).abs() < 1e-10 { return 0; }
+    let norm = ((value - min) / (max - min)).clamp(0.0, 1.0);
+    (norm * (VIG_LEVELS - 1) as f64).round() as u32
+}
+
+fn dequant_vig(level: u32, min: f64, max: f64) -> f64 {
+    min + (level as f64 / (VIG_LEVELS - 1) as f64) * (max - min)
+}
+
+fn quant6(pct: f64) -> u32 {
+    ((pct / 100.0) * Q6_MAX as f64).round().clamp(0.0, Q6_MAX as f64) as u32
+}
+
+fn dequant6(q: u32) -> f64 {
+    (q as f64 * (100.0 / Q6_MAX as f64)).round()
+}
+
+#[inline(always)]
+fn pythagoras_dist(lat1: f64, lng1: f64, lat2: f64, lng2: f64, cos_lat: f64) -> f64 {
+    let dlat = (lat2 - lat1) * M_PER_DEG;
+    let dlng = (lng2 - lng1) * M_PER_DEG * cos_lat;
+    (dlat * dlat + dlng * dlng).sqrt()
+}
+
+fn smooth_intensity(tower_idx: usize, new_val: f64) -> f64 {
+    unsafe {
+        if INTENSITY_HISTORY.is_none() {
+            INTENSITY_HISTORY = Some(Vec::new());
+        }
+        let hist = INTENSITY_HISTORY.as_mut().unwrap();
+        while hist.len() <= tower_idx {
+            hist.push(Vec::new());
+        }
+        let h = &mut hist[tower_idx];
+        h.push(new_val);
+        if h.len() > HIST_SIZE { h.remove(0); }
+        h.iter().sum::<f64>() / h.len() as f64
+    }
+}
+
+fn vig_category(level: u32) -> String {
+    match level {
+        0..=3 => "EXCELENTE".to_string(),
+        4..=7 => "BUENA".to_string(),
+        8..=11 => "MODERADA".to_string(),
+        12..=15 => "BAJA".to_string(),
+        _ => "MUY BAJA".to_string(),
+    }
+}
+
+#[inline(always)]
+fn tukey_bisquare_weight(residual: f64, scale: f64) -> f64 {
+    let u = residual / (scale * TUKEY_C);
+    if u.abs() >= 1.0 {
+        0.0
+    } else {
+        let u2 = u * u;
+        (1.0 - u2) * (1.0 - u2)
+    }
+}
+
+#[inline(always)]
+fn compute_quality_gate(tower: &Tower, distance: f64) -> f64 {
+    let mut score = 1.0;
+
+    let range_ratio = distance / (tower.range_km * 1000.0);
+    if range_ratio > 1.5 {
+        score *= 0.3;
+    } else if range_ratio > 1.0 {
+        score *= 0.6;
+    }
+
+    let power = tower.power_dbm.abs();
+    if power > 110.0 {
+        score *= 0.4;
+    } else if power > 100.0 {
+        score *= 0.7;
+    } else if power < 70.0 {
+        score *= 1.1_f64.min(1.0);
+    }
+
+    if tower.range_km < 0.5 {
+        score *= 0.5;
+    }
+
+    score.clamp(0.1, 1.0)
+}
+
+fn compute_tower_weight(tower: &Tower, distance: f64, quality_gate: f64) -> f64 {
+    let signal_factor = (1.0 - (tower.power_dbm.abs() - 50.0) / 80.0).clamp(0.3, 1.0);
+    let dist_factor = (1.0 - distance / (tower.range_km * 1000.0 * 2.0)).clamp(0.1, 1.0);
+    let weight = signal_factor * dist_factor * quality_gate;
+    weight.clamp(0.05, 1.0)
+}
+
+fn classify_motif(circles: &[(f64, f64)]) -> String {
+    if circles.len() < 3 {
+        return "insufficient".to_string();
+    }
+    let (x0, y0) = circles[0];
+    let (x1, y1) = circles[1];
+    let (x2, y2) = circles[2];
+
+    let d01 = ((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt();
+    let d02 = ((x2 - x0).powi(2) + (y2 - y0).powi(2)).sqrt();
+    let d12 = ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt();
+
+    let sides = {
+        let mut s = [d01, d02, d12];
+        s.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        s
+    };
+
+    let ratio = if sides[2] > 1e-6 { sides[0] / sides[2] } else { 1.0 };
+
+    if ratio > 0.8 {
+        "equilateral".to_string()
+    } else if ratio > 0.5 {
+        "isosceles".to_string()
+    } else if ratio > 0.2 {
+        "scalene".to_string()
+    } else {
+        "degenerate".to_string()
+    }
+}
+
+#[inline(always)]
+fn compute_gdop(positions: &[(f64, f64)], est_x: f64, est_y: f64) -> f64 {
+    if positions.len() < 3 {
+        return 99.0;
+    }
+
+    let mut ata = [[0.0f64; 2]; 2];
+    for (tx, ty) in positions {
+        let dx = tx - est_x;
+        let dy = ty - est_y;
+        let d = (dx * dx + dy * dy).sqrt().max(1.0);
+        let ux = dx / d;
+        let uy = dy / d;
+        ata[0][0] += ux * ux;
+        ata[0][1] += ux * uy;
+        ata[1][0] += ux * uy;
+        ata[1][1] += uy * uy;
+    }
+
+    let det = ata[0][0] * ata[1][1] - ata[0][1] * ata[1][0];
+    if det.abs() < 1e-10 {
+        return 99.0;
+    }
+
+    let trace_inv = (ata[1][1] + ata[0][0]) / det;
+    if trace_inv <= 0.0 {
+        return 99.0;
+    }
+    trace_inv.sqrt().min(99.0)
+}
+
+struct Circle {
+    x: f64,
+    y: f64,
+    r: f64,
+    dist: f64,
+    idx: usize,
+    weight: f64,
+    quality_gate: f64,
+}
+
+fn gn_irls_solve(circles: &[Circle]) -> (f64, f64, usize, usize) {
+    let n = circles.len();
+    if n < 3 {
+        return (0.0, 0.0, 0, 0);
+    }
+
+    let mut best_x = 0.0;
+    let mut best_y = 0.0;
+    let mut best_cost = f64::MAX;
+    let mut total_gn = 0usize;
+    let mut total_irls = 0usize;
+
+    let centroid_x: f64 = circles.iter().map(|c| c.x).sum::<f64>() / n as f64;
+    let centroid_y: f64 = circles.iter().map(|c| c.y).sum::<f64>() / n as f64;
+
+    let starts: Vec<(f64, f64)> = {
+        let mut s = vec![(centroid_x, centroid_y)];
+        for c in circles.iter().take(n.min(MAX_TOWERS)) {
+            s.push((c.x, c.y));
+        }
+        let golden = 2.399963229728653;
+        for k in 0..MULTI_START.saturating_sub(s.len()) {
+            let angle = k as f64 * golden;
+            let r = 500.0 * ((k + 1) as f64 / MULTI_START as f64).sqrt();
+            s.push((centroid_x + r * angle.cos(), centroid_y + r * angle.sin()));
+        }
+        s.truncate(MULTI_START);
+        s
+    };
+
+    for (sx, sy) in &starts {
+        let mut x = *sx;
+        let mut y = *sy;
+
+        // TRIDENT HPC: LM damping adaptativo (Levenberg-Marquardt)
+        let mut lam = 5.0_f64;
+        let mut nu = 2.0_f64;
+
+        for irls_iter in 0..IRLS_MAX_ITER {
+            let residuals: Vec<f64> = circles.iter().map(|c| {
+                let dx = x - c.x;
+                let dy = y - c.y;
+                let d = (dx * dx + dy * dy).sqrt();
+                (d - c.r) * c.weight
+            }).collect();
+
+            let mad = {
+                let mut abs_res: Vec<f64> = residuals.iter().map(|r| r.abs()).collect();
+                abs_res.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                let mid = abs_res.len() / 2;
+                if abs_res.len() % 2 == 0 && abs_res.len() >= 2 {
+                    (abs_res[mid - 1] + abs_res[mid]) / 2.0
+                } else {
+                    abs_res[mid]
+                }
+            };
+            let scale = (mad * 1.4826).max(1.0);
+
+            let tukey_weights: Vec<f64> = residuals.iter().map(|r| {
+                tukey_bisquare_weight(*r, scale)
+            }).collect();
+
+            for _gn_iter in 0..GN_MAX_ITER {
+                total_gn += 1;
+                let mut jt_w_j = [[0.0f64; 2]; 2];
+                let mut jt_w_r = [0.0f64; 2];
+                let mut current_cost = 0.0_f64;
+
+                for (i, c) in circles.iter().enumerate() {
+                    let dx = x - c.x;
+                    let dy = y - c.y;
+                    let d = (dx * dx + dy * dy).sqrt().max(1e-6);
+
+                    let jx = dx / d;
+                    let jy = dy / d;
+                    let res = d - c.r;
+                    let w = c.weight * tukey_weights[i] * c.quality_gate;
+
+                    jt_w_j[0][0] += w * jx * jx;
+                    jt_w_j[0][1] += w * jx * jy;
+                    jt_w_j[1][0] += w * jy * jx;
+                    jt_w_j[1][1] += w * jy * jy;
+                    jt_w_r[0] += w * jx * res;
+                    jt_w_r[1] += w * jy * res;
+                    current_cost += w * res * res;
+                }
+
+                // LM damping: sumar lam a la diagonal de J^T W J
+                jt_w_j[0][0] += lam;
+                jt_w_j[1][1] += lam;
+
+                let det = jt_w_j[0][0] * jt_w_j[1][1] - jt_w_j[0][1] * jt_w_j[1][0];
+                if det.abs() < 1e-12 {
+                    break;
+                }
+
+                let delta_x = (jt_w_j[1][1] * jt_w_r[0] - jt_w_j[0][1] * jt_w_r[1]) / det;
+                let delta_y = (jt_w_j[0][0] * jt_w_r[1] - jt_w_j[1][0] * jt_w_r[0]) / det;
+
+                let new_x = x - delta_x;
+                let new_y = y - delta_y;
+
+                // Recalcular costo en el nuevo punto (FIX: comparar contra currentCost)
+                let mut cost_new = 0.0_f64;
+                for (i, c) in circles.iter().enumerate() {
+                    let dx = new_x - c.x;
+                    let dy = new_y - c.y;
+                    let d = (dx * dx + dy * dy).sqrt().max(1e-6);
+                    let res = d - c.r;
+                    let w = c.weight * tukey_weights[i] * c.quality_gate;
+                    cost_new += w * res * res;
+                }
+
+                if cost_new < current_cost {
+                    x = new_x;
+                    y = new_y;
+                    lam = (lam * 0.33).max(1e-7);
+                    nu = 2.0;
+                } else {
+                    lam *= nu;
+                    nu *= 2.0;
+                    if lam > 1e6 {
+                        break;
+                    }
+                    continue;
+                }
+
+                let _ = irls_iter;
+                if delta_x.abs() < 0.005 && delta_y.abs() < 0.005 {
+                    break;
+                }
+            }
+            total_irls += 1;
+        }
+
+        let cost: f64 = circles.iter().map(|c| {
+            let dx = x - c.x;
+            let dy = y - c.y;
+            let d = (dx * dx + dy * dy).sqrt();
+            let res = (d - c.r) * c.weight * c.quality_gate;
+            res * res
+        }).sum();
+
+        if cost < best_cost {
+            best_cost = cost;
+            best_x = x;
+            best_y = y;
+        }
+    }
+
+    (best_x, best_y, total_gn, total_irls)
+}
+
+fn waveguide_cutoff_freq(mode: usize) -> f64 {
+    (mode as f64) * C_LIGHT / (2.0 * IONOSPHERE_H_M)
+}
+
+fn waveguide_phase_velocity(freq: f64, mode: usize) -> f64 {
+    let fc = waveguide_cutoff_freq(mode);
+    if freq <= fc { return C_LIGHT; }
+    C_LIGHT / (1.0 - (fc / freq).powi(2)).sqrt()
+}
+
+fn waveguide_group_velocity(freq: f64, mode: usize) -> f64 {
+    let fc = waveguide_cutoff_freq(mode);
+    if freq <= fc { return 0.0; }
+    C_LIGHT * (1.0 - (fc / freq).powi(2)).sqrt()
+}
+
+fn elf_skin_depth(freq: f64, conductivity: f64) -> f64 {
+    let mu0 = 4.0 * PI * 1e-7;
+    let omega = 2.0 * PI * freq;
+    (2.0 / (omega * mu0 * conductivity)).sqrt()
+}
+
+fn ionospheric_reflection_coeff(freq: f64, dip_angle_deg: f64) -> f64 {
+    let dip_rad = dip_angle_deg * DEG2RAD;
+    let electron_gyro = 1.4e6;
+    let plasma_freq = 3.0e6;
+    let collision_freq = 1.0e4;
+
+    let x = (plasma_freq / freq).powi(2);
+    let y = electron_gyro / freq;
+    let z = collision_freq / freq;
+
+    let ql = x / (1.0 - z * z + y * y * dip_rad.sin().powi(2));
+    let r_mag = (1.0 - ql).abs().sqrt().clamp(0.3, 0.99);
+
+    r_mag * (-0.01 * freq / SCHUMANN_F0).exp()
+}
+
+fn great_circle_distance_m(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
+    let phi1 = lat1 * DEG2RAD;
+    let phi2 = lat2 * DEG2RAD;
+    let dphi = (lat2 - lat1) * DEG2RAD;
+    let dlam = (lng2 - lng1) * DEG2RAD;
+    let a = (dphi / 2.0).sin().powi(2) + phi1.cos() * phi2.cos() * (dlam / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+    EARTH_RADIUS_M * c
+}
+
+fn elf_waveguide_attenuation(dist_m: f64, freq: f64) -> f64 {
+    let dist_mm = dist_m / 1_000_000.0;
+    let alpha_db = ELF_ATTENUATION_DB_MM * (freq / SCHUMANN_F0).sqrt() * dist_mm;
+    let alpha_linear = 10.0_f64.powf(-alpha_db / 20.0);
+
+    let geometric_spread = if dist_m > 100.0 {
+        (100.0 / dist_m).sqrt()
+    } else {
+        1.0
+    };
+
+    alpha_linear * geometric_spread
+}
+
+fn multimode_field_strength(dist_m: f64, freq: f64, n_bounces: usize) -> f64 {
+    let mut total_field = 0.0f64;
+
+    for mode in 0..WAVEGUIDE_MODES {
+        let vp = waveguide_phase_velocity(freq, mode + 1);
+        let k = 2.0 * PI * freq / vp;
+
+        let mode_phase = k * dist_m;
+
+        let atten = elf_waveguide_attenuation(dist_m, freq);
+
+        let r_iono = ionospheric_reflection_coeff(freq, HONDURAS_GEOMAG_DIP_DEG);
+        let bounce_loss = r_iono.powi(n_bounces as i32);
+
+        let mode_amp = atten * bounce_loss / ((mode + 1) as f64);
+
+        total_field += mode_amp * mode_phase.cos();
+    }
+
+    total_field
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ElfWaveguideResult {
+    pub adjustments: Vec<f64>,
+    pub coherence_total: f64,
+    pub dominant_harmonic_hz: f64,
+    pub waveguide_modes: usize,
+    pub ionosphere_height_km: f64,
+    pub reflection_coeff: f64,
+    pub skin_depth_ground_m: f64,
+    pub skin_depth_sea_m: f64,
+    pub phase_velocity_ratio: f64,
+    pub group_velocity_ratio: f64,
+    pub elf_attenuation_db_mm: f64,
+    pub field_strengths: Vec<f64>,
+    pub n_bounces: usize,
+}
+
+fn elf_waveguide_propagate(circles: &[Circle], est_x: f64, est_y: f64, center_lat: f64, center_lng: f64) -> ElfWaveguideResult {
+    let n = circles.len();
+    let timestamp = performance_now() / 1000.0;
+
+    if n < 2 {
+        return ElfWaveguideResult {
+            adjustments: vec![0.0; n],
+            coherence_total: 0.0,
+            dominant_harmonic_hz: SCHUMANN_F0,
+            waveguide_modes: WAVEGUIDE_MODES,
+            ionosphere_height_km: IONOSPHERE_H_KM,
+            reflection_coeff: 0.0,
+            skin_depth_ground_m: 0.0,
+            skin_depth_sea_m: 0.0,
+            phase_velocity_ratio: 1.0,
+            group_velocity_ratio: 1.0,
+            elf_attenuation_db_mm: ELF_ATTENUATION_DB_MM,
+            field_strengths: vec![],
+            n_bounces: 0,
+        };
+    }
+
+    let est_lat = center_lat + est_y / M_PER_DEG;
+    let cos_lat = (center_lat * DEG2RAD).cos();
+    let est_lng = center_lng + est_x / (M_PER_DEG * cos_lat);
+
+    let mut field_strengths = vec![0.0f64; n];
+    let mut phase_offsets = vec![0.0f64; n];
+    let mut coherence = vec![0.0f64; n];
+
+    let dist_to_coast_m = great_circle_distance_m(est_lat, est_lng, 15.8, -87.5);
+    let n_bounces = ((dist_to_coast_m / IONOSPHERE_H_M).ceil() as usize).max(1).min(8);
+
+    for i in 0..n {
+        let dx = circles[i].x - est_x;
+        let dy = circles[i].y - est_y;
+        let dist = (dx * dx + dy * dy).sqrt();
+
+        let mut total_field = 0.0;
+        let mut total_coherence = 0.0;
+
+        for (k, fh) in SCHUMANN_HARMONICS.iter().enumerate() {
+            let field = multimode_field_strength(dist, *fh, n_bounces);
+            let weight = 1.0 / (k as f64 + 1.0);
+            total_field += field * weight;
+            total_coherence += field.abs() * weight;
+        }
+        total_field /= SCHUMANN_HARMONICS.len() as f64;
+        total_coherence /= SCHUMANN_HARMONICS.len() as f64;
+
+        field_strengths[i] = total_field;
+        coherence[i] = total_coherence;
+
+        let vp = waveguide_phase_velocity(SCHUMANN_F0, 1);
+        let k_eff = 2.0 * PI * SCHUMANN_F0 / vp;
+        let phase_spatial = k_eff * dist;
+        let phase_temporal = 2.0 * PI * SCHUMANN_F0 * (timestamp % (1.0 / SCHUMANN_F0));
+        phase_offsets[i] = (phase_spatial + phase_temporal) % (2.0 * PI);
+    }
+
+    let max_coh = coherence.iter().cloned().fold(0.0f64, f64::max).max(1e-10);
+
+    let mut adjustments = vec![0.0f64; n];
+    for i in 0..n {
+        let dx = circles[i].x - est_x;
+        let dy = circles[i].y - est_y;
+        let dist = (dx * dx + dy * dy).sqrt();
+        let err = (dist - circles[i].r).abs();
+
+        let mut phase_coupling = 0.0;
+        for j in 0..n {
+            if i == j { continue; }
+            let mut pd = (phase_offsets[i] - phase_offsets[j]).abs();
+            if pd > PI { pd = 2.0 * PI - pd; }
+            phase_coupling += pd.cos() / n as f64;
+        }
+
+        let coh_ratio = coherence[i] / max_coh;
+        let field_sign = if field_strengths[i] >= 0.0 { 1.0 } else { -1.0 };
+        let resonance = coh_ratio * (0.5 + 0.5 * phase_coupling) * (0.8 + 0.2 * field_sign);
+
+        adjustments[i] = SCHUMANN_COUPLING * err * (resonance - 0.5);
+    }
+
+    let total_coh = coherence.iter().sum::<f64>() / n as f64;
+
+    let mut best_h_energy = -1.0f64;
+    let mut dominant_idx = 0usize;
+    for (k, fh) in SCHUMANN_HARMONICS.iter().enumerate() {
+        let h_sum: f64 = (0..n).map(|i| {
+            let dx = circles[i].x - est_x;
+            let dy = circles[i].y - est_y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            multimode_field_strength(dist, *fh, n_bounces).abs()
+        }).sum();
+        if h_sum > best_h_energy {
+            best_h_energy = h_sum;
+            dominant_idx = k;
+        }
+    }
+
+    let r_coeff = ionospheric_reflection_coeff(SCHUMANN_F0, HONDURAS_GEOMAG_DIP_DEG);
+    let skin_ground = elf_skin_depth(SCHUMANN_F0, ELF_CONDUCTIVITY_GROUND);
+    let skin_sea = elf_skin_depth(SCHUMANN_F0, ELF_CONDUCTIVITY_SEA);
+    let vp = waveguide_phase_velocity(SCHUMANN_F0, 1);
+    let vg = waveguide_group_velocity(SCHUMANN_F0, 1);
+
+    ElfWaveguideResult {
+        adjustments,
+        coherence_total: (total_coh * 1e6).round() / 1e6,
+        dominant_harmonic_hz: SCHUMANN_HARMONICS[dominant_idx],
+        waveguide_modes: WAVEGUIDE_MODES,
+        ionosphere_height_km: IONOSPHERE_H_KM,
+        reflection_coeff: (r_coeff * 1e6).round() / 1e6,
+        skin_depth_ground_m: (skin_ground * 100.0).round() / 100.0,
+        skin_depth_sea_m: (skin_sea * 100.0).round() / 100.0,
+        phase_velocity_ratio: (vp / C_LIGHT * 1e6).round() / 1e6,
+        group_velocity_ratio: (vg / C_LIGHT * 1e6).round() / 1e6,
+        elf_attenuation_db_mm: ELF_ATTENUATION_DB_MM,
+        field_strengths: field_strengths.iter().map(|f| (*f * 1e6).round() / 1e6).collect(),
+        n_bounces,
+    }
+}
+
+fn schumann_modulate(circles: &[Circle], est_x: f64, est_y: f64, center_lat: f64, center_lng: f64) -> Vec<f64> {
+    let result = elf_waveguide_propagate(circles, est_x, est_y, center_lat, center_lng);
+    result.adjustments
+}
+
+#[wasm_bindgen]
+pub fn init_engine() {
+    unsafe {
+        PASCAL_CACHE = Some(Vec::new());
+        INTENSITY_HISTORY = Some(Vec::new());
+        NEAT_GEN = 0;
+    }
+    for d in [3, 4, 5, 6, 7] {
+        get_pascal(d);
+    }
+}
+
+#[wasm_bindgen]
+pub fn triangulate(towers_json: &str, center_lat: f64, center_lng: f64) -> String {
+    let start = performance_now();
+
+    let towers: Vec<Tower> = match serde_json::from_str(towers_json) {
+        Ok(t) => t,
+        Err(e) => return serde_json::to_string(&serde_json::json!({"error": e.to_string()})).unwrap(),
+    };
+
+    if towers.len() < 3 {
+        return serde_json::to_string(&serde_json::json!({"error": "Need at least 3 towers"})).unwrap();
+    }
+
+    let cos_lat = (center_lat * DEG2RAD).cos();
+    let sin_lat = (center_lat * DEG2RAD).sin();
+    let m_per_lng = M_PER_DEG * cos_lat;
+
+    let bake_in = BakeIn {
+        cos_lat, sin_lat, m_per_lng, center_lat, center_lng,
+    };
+
+    let mut tower_dists: Vec<(usize, f64)> = towers.iter().enumerate()
+        .map(|(i, t)| (i, pythagoras_dist(center_lat, center_lng, t.lat, t.lng, cos_lat)))
+        .collect();
+    tower_dists.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+    let n_use = tower_dists.len().min(MAX_TOWERS);
+    let best_n: Vec<usize> = tower_dists.iter().take(n_use).map(|(i, _)| *i).collect();
+
+    let circles: Vec<Circle> = best_n.iter().enumerate().map(|(idx, &i)| {
+        let t = &towers[i];
+        let dist = pythagoras_dist(center_lat, center_lng, t.lat, t.lng, cos_lat);
+        let signal_factor = (1.0 - (t.power_dbm.abs() - 50.0) / 80.0).clamp(0.3, 1.0);
+        let smoothed = smooth_intensity(i, signal_factor);
+        let radius = t.range_km * 1000.0 * 0.7 * smoothed;
+        let quality_gate = compute_quality_gate(t, dist);
+        let weight = compute_tower_weight(t, dist, quality_gate);
+        Circle {
+            x: (t.lng - center_lng) * m_per_lng,
+            y: (t.lat - center_lat) * M_PER_DEG,
+            r: radius,
+            dist,
+            idx: i,
+            weight,
+            quality_gate,
+        }
+    }).collect();
+
+    let (mut best_x, mut best_y, gn_iters, irls_iters) = gn_irls_solve(&circles);
+
+    let sch_adj = schumann_modulate(&circles, best_x, best_y, center_lat, center_lng);
+    let sch_circles: Vec<Circle> = circles.iter().enumerate().map(|(i, c)| {
+        Circle {
+            x: c.x, y: c.y, r: c.r, dist: c.dist, idx: c.idx,
+            weight: (c.weight * (1.0 + sch_adj[i] * 0.001)).max(0.05),
+            quality_gate: c.quality_gate,
+        }
+    }).collect();
+    let (sch_x, sch_y, _, _) = gn_irls_solve(&sch_circles);
+    let sch_cost: f64 = sch_circles.iter().map(|c| {
+        let dx = sch_x - c.x;
+        let dy = sch_y - c.y;
+        let d = (dx * dx + dy * dy).sqrt();
+        let r = (d - c.r) * c.weight * c.quality_gate;
+        r * r
+    }).sum();
+    let orig_cost: f64 = circles.iter().map(|c| {
+        let dx = best_x - c.x;
+        let dy = best_y - c.y;
+        let d = (dx * dx + dy * dy).sqrt();
+        let r = (d - c.r) * c.weight * c.quality_gate;
+        r * r
+    }).sum();
+    if sch_cost < orig_cost * 1.05 {
+        best_x = sch_x;
+        best_y = sch_y;
+    }
+
+    let tri_lat = center_lat + best_y / M_PER_DEG;
+    let tri_lng = center_lng + best_x / m_per_lng;
+
+    let tower_positions: Vec<(f64, f64)> = circles.iter().map(|c| (c.x, c.y)).collect();
+    let gdop = compute_gdop(&tower_positions, best_x, best_y);
+
+    let motif = classify_motif(&tower_positions);
+
+    let max_dist = circles.iter().map(|c| c.dist).fold(0.0f64, |a, b| a.max(b)) * 1.2;
+    let tower_distances: Vec<TowerDistance> = circles.iter().map(|c| {
+        let t = &towers[c.idx];
+        let vig = quant_vig(c.dist, 0.0, max_dist);
+        let signal_pct = (1.0 - c.dist / (t.range_km * 1000.0)).clamp(0.0, 1.0) * 100.0;
+        TowerDistance {
+            tower_id: t.id.clone(),
+            distance_m: (c.dist * 100.0).round() / 100.0,
+            radius_m: (c.r * 100.0).round() / 100.0,
+            vig_level: vig,
+            vig_category: vig_category(vig),
+            q6_signal: quant6(signal_pct),
+            tower_lat: t.lat,
+            tower_lng: t.lng,
+            weight: (c.weight * 1000.0).round() / 1000.0,
+            quality_gate: (c.quality_gate * 1000.0).round() / 1000.0,
+        }
+    }).collect();
+
+    let max_radius = circles.iter().map(|c| c.r).fold(0.0f64, |a, b| a.max(b));
+    let avg_dist = circles.iter().map(|c| c.dist).sum::<f64>() / circles.len() as f64;
+    let avg_qg = circles.iter().map(|c| c.quality_gate).sum::<f64>() / circles.len() as f64;
+    let gdop_penalty = (gdop - 2.0).max(0.0) * 5.0;
+    let tower_bonus = if n_use > 3 { ((n_use - 3).min(5) * 3) as f64 } else { 0.0 };
+    let qg_bonus = (avg_qg - 0.5).max(0.0) * 10.0;
+    let confidence = (100.0 - (avg_dist / max_radius) * 30.0 - gdop_penalty + tower_bonus + qg_bonus).clamp(0.0, 100.0);
+    let confidence_q6 = quant6(confidence);
+    let confidence_final = dequant6(confidence_q6);
+
+    let pascal_w = get_pascal(n_use.max(3).min(7));
+    let mut pascal_sum = 0.0;
+    let mut weight_sum = 0.0;
+    for (i, td) in tower_distances.iter().enumerate() {
+        if i < pascal_w.len() {
+            pascal_sum += pascal_w[i] * (100.0 - td.distance_m / 100.0);
+            weight_sum += pascal_w[i];
+        }
+    }
+    let pascal_confidence = if weight_sum > 0.0 {
+        (pascal_sum / weight_sum).clamp(0.0, 100.0)
+    } else { 0.0 };
+
+    let base_acc = 35.0 - (n_use as f64 - 3.0).min(5.0) * 3.5;
+    let gdop_factor = (gdop / 1.5).clamp(0.6, 2.5);
+    let qg_factor = (1.3 - avg_qg * 0.5).clamp(0.7, 1.2);
+    let accuracy = (base_acc * gdop_factor * qg_factor).clamp(8.0, 150.0);
+
+    let elapsed_ms = performance_now() - start;
+
+    let result = TriangulationResult {
+        lat: (tri_lat * 1e6).round() / 1e6,
+        lng: (tri_lng * 1e6).round() / 1e6,
+        confidence: confidence_final,
+        pascal_confidence: (pascal_confidence * 10.0).round() / 10.0,
+        accuracy_meters: (accuracy * 100.0).round() / 100.0,
+        gdop: (gdop * 100.0).round() / 100.0,
+        tower_distances,
+        bake_in,
+        pascal_weights: pascal_w,
+        computation_ms: (elapsed_ms * 1000.0).round() / 1000.0,
+        solver: "GN-IRLS-TukeyBisquare".to_string(),
+        towers_used: n_use,
+        irls_iterations: irls_iters,
+        gn_iterations: gn_iters,
+        motif,
+    };
+
+    serde_json::to_string(&result).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn process_ping_signal(latency_ms: f64) -> String {
+    let speed_of_light_km_ms = 299.792458;
+    let fiber_factor = 0.66;
+    let estimated_distance_km = latency_ms * speed_of_light_km_ms * fiber_factor / 2.0;
+
+    let q6_lat = quant6((latency_ms * 2.0).clamp(0.0, 100.0));
+    let vig_dist = quant_vig(estimated_distance_km, 0.0, 5000.0);
+
+    let confidence_adjustment = if latency_ms < 5.0 {
+        5.0
+    } else if latency_ms < 20.0 {
+        2.0
+    } else if latency_ms < 50.0 {
+        0.0
+    } else if latency_ms < 100.0 {
+        -3.0
+    } else {
+        -8.0
+    };
+
+    let result = PingResult {
+        latency_ms: (latency_ms * 1000.0).round() / 1000.0,
+        estimated_distance_km: (estimated_distance_km * 100.0).round() / 100.0,
+        q6_latency: q6_lat,
+        vig_distance: vig_dist,
+        confidence_adjustment,
+        timing: "performance.now() (sub-millisecond)".to_string(),
+    };
+
+    serde_json::to_string(&result).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn tick_snn() -> String {
+    unsafe {
+        NEAT_GEN += 1;
+
+        let now = performance_now();
+        let seed1 = ((now * 13.7) % 12.0) as f64;
+        let seed2 = ((now * 7.3) % 28.0) as f64;
+        let seed3 = ((now * 11.1) % 28.0) as f64;
+        let seed4 = ((now * 9.2) % 20.0) as f64;
+        let seed5 = ((now * 5.8) % 24.0) as f64;
+
+        let q1 = quant6(88.0 + seed1);
+        let q2 = quant6(68.0 + seed2);
+        let q3 = quant6(72.0 + seed3);
+        let q4 = quant6(40.0 + seed4);
+        let q5 = quant6(35.0 + seed5);
+        let gen = NEAT_GEN.min(7133) * 12;
+
+        let pcts = [dequant6(q1), dequant6(q2), dequant6(q3), dequant6(q4), dequant6(q5)];
+        let names = ["reactivo", "analitico", "pascal", "temporal", "ambiental"];
+        let active = pcts.iter().filter(|&&p| p > 30.0).count() as u32;
+        let max_idx = pcts.iter().enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .map(|(i, _)| i).unwrap_or(0);
+
+        let state = SNNState {
+            reactivo_q6: q1,
+            analitico_q6: q2,
+            pascal_q6: q3,
+            temporal_q6: q4,
+            ambiental_q6: q5,
+            neat_gen: gen,
+            reactivo_pct: pcts[0],
+            analitico_pct: pcts[1],
+            pascal_pct: pcts[2],
+            temporal_pct: pcts[3],
+            ambiental_pct: pcts[4],
+            arms_active: active,
+            dominant_arm: names[max_idx].to_string(),
+        };
+
+        serde_json::to_string(&state).unwrap()
+    }
+}
+
+#[wasm_bindgen]
+pub fn quant_vigesimal(value: f64, min: f64, max: f64) -> u32 {
+    quant_vig(value, min, max)
+}
+
+#[wasm_bindgen]
+pub fn dequant_vigesimal(level: u32, min: f64, max: f64) -> f64 {
+    dequant_vig(level, min, max)
+}
+
+#[wasm_bindgen]
+pub fn quantize_6bit(pct: f64) -> u32 {
+    quant6(pct)
+}
+
+#[wasm_bindgen]
+pub fn dequantize_6bit(q: u32) -> f64 {
+    dequant6(q)
+}
+
+#[wasm_bindgen]
+pub fn get_pascal_weights(depth: usize) -> String {
+    let w = get_pascal(depth);
+    serde_json::to_string(&w).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn pythagorean_distance(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
+    let cos_lat = (lat1 * DEG2RAD).cos();
+    pythagoras_dist(lat1, lng1, lat2, lng2, cos_lat)
+}
+
+#[wasm_bindgen]
+pub fn engine_info() -> String {
+    serde_json::to_string(&serde_json::json!({
+        "name": "ClonEngine Triangulation",
+        "version": "2.2.0",
+        "runtime": "Rust/WASM",
+        "timing": "performance.now() (sub-millisecond resolution)",
+        "solver": "GN-IRLS-TukeyBisquare+ELF-Waveguide",
+        "max_towers": MAX_TOWERS,
+        "multi_start": MULTI_START,
+        "gn_iterations": GN_MAX_ITER,
+        "irls_iterations": IRLS_MAX_ITER,
+        "tukey_c": TUKEY_C,
+        "features": [
+            "GN-IRLS Solver with Tukey Bisquare M-estimator",
+            "Multi-start optimization (10 initial points)",
+            "Top-8 tower selection by distance",
+            "Quality gates per tower",
+            "GDOP computation",
+            "Motif classification (equilateral/isosceles/scalene)",
+            "Vigesimal Quantization (20-level Maya)",
+            "6-bit Quantization (64-step SNN)",
+            "Pascal Cascade (depth 3-7)",
+            "Intensity Memory (5-tick window)",
+            "SNN 5-Arm fusion (reactivo/analitico/pascal/temporal/ambiental)",
+            "ELF Ionospheric Waveguide 7.83Hz (multimode propagation, Schumann cavity)",
+            "Ionospheric Reflection Modeling (geomagnetic dip-angle dependent)",
+            "Maritime ELF Propagation (skin-depth sea/ground, attenuation 1dB/Mm)",
+            "Computation Latency Measurement"
+        ],
+        "elf_waveguide": {
+            "schumann_f0_hz": SCHUMANN_F0,
+            "harmonics": SCHUMANN_HARMONICS,
+            "ionosphere_height_km": IONOSPHERE_H_KM,
+            "earth_radius_m": EARTH_RADIUS_M,
+            "waveguide_modes": WAVEGUIDE_MODES,
+            "elf_attenuation_db_per_Mm": ELF_ATTENUATION_DB_MM,
+            "conductivity_ground_S_m": ELF_CONDUCTIVITY_GROUND,
+            "conductivity_sea_S_m": ELF_CONDUCTIVITY_SEA,
+            "geomag_dip_honduras_deg": HONDURAS_GEOMAG_DIP_DEG,
+        },
+        "bake_in": {
+            "DEG2RAD": DEG2RAD,
+            "M_PER_DEG": M_PER_DEG,
+            "VIG_LEVELS": VIG_LEVELS,
+            "Q6_MAX": Q6_MAX,
+            "HIST_SIZE": HIST_SIZE,
+            "ARC_LEN": ARC_LEN
+        }
+    })).unwrap()
+}
+
+#[wasm_bindgen]
+pub fn elf_waveguide_info(lat: f64, lng: f64) -> String {
+    let r_coeff = ionospheric_reflection_coeff(SCHUMANN_F0, HONDURAS_GEOMAG_DIP_DEG);
+    let skin_ground = elf_skin_depth(SCHUMANN_F0, ELF_CONDUCTIVITY_GROUND);
+    let skin_sea = elf_skin_depth(SCHUMANN_F0, ELF_CONDUCTIVITY_SEA);
+    let vp = waveguide_phase_velocity(SCHUMANN_F0, 1);
+    let vg = waveguide_group_velocity(SCHUMANN_F0, 1);
+
+    let dist_coast = great_circle_distance_m(lat, lng, 15.8, -87.5);
+    let n_bounces = ((dist_coast / IONOSPHERE_H_M).ceil() as usize).max(1).min(8);
+
+    let mut mode_info = Vec::new();
+    for m in 1..=WAVEGUIDE_MODES {
+        let fc = waveguide_cutoff_freq(m);
+        let vp_m = waveguide_phase_velocity(SCHUMANN_F0, m);
+        let vg_m = waveguide_group_velocity(SCHUMANN_F0, m);
+        mode_info.push(serde_json::json!({
+            "mode": m,
+            "cutoff_hz": (fc * 100.0).round() / 100.0,
+            "phase_velocity_c": (vp_m / C_LIGHT * 1e6).round() / 1e6,
+            "group_velocity_c": (vg_m / C_LIGHT * 1e6).round() / 1e6,
+            "propagating": SCHUMANN_F0 > fc,
+        }));
+    }
+
+    serde_json::to_string(&serde_json::json!({
+        "schumann_f0_hz": SCHUMANN_F0,
+        "lambda_m": (SCHUMANN_LAMBDA * 100.0).round() / 100.0,
+        "ionosphere_height_km": IONOSPHERE_H_KM,
+        "reflection_coefficient": (r_coeff * 1e6).round() / 1e6,
+        "skin_depth_ground_m": (skin_ground * 100.0).round() / 100.0,
+        "skin_depth_sea_m": (skin_sea * 100.0).round() / 100.0,
+        "phase_velocity_ratio": (vp / C_LIGHT * 1e6).round() / 1e6,
+        "group_velocity_ratio": (vg / C_LIGHT * 1e6).round() / 1e6,
+        "geomag_dip_deg": HONDURAS_GEOMAG_DIP_DEG,
+        "distance_to_coast_m": (dist_coast * 10.0).round() / 10.0,
+        "estimated_bounces": n_bounces,
+        "waveguide_modes": mode_info,
+        "earth_radius_m": EARTH_RADIUS_M,
+        "elf_attenuation_db_per_Mm": ELF_ATTENUATION_DB_MM
