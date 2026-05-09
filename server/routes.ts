@@ -299,6 +299,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json({ status: "pending" });
   });
 
+  // ─── RevenueCat Webhook ─────────────────────────────────────────────────────
+  app.post("/api/webhooks/revenuecat", async (req: Request, res: Response) => {
+    const authHeader = req.headers["authorization"] as string | undefined;
+    const webhookSecret = process.env.REVENUECAT_SECRET_API_KEY;
+
+    // Validate bearer token if secret is configured
+    if (webhookSecret) {
+      const token = authHeader?.replace("Bearer ", "").trim();
+      if (!token || token !== webhookSecret) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+    }
+
+    const event = req.body;
+    const eventType: string = event.event?.type || "";
+    const appUserId: string = event.event?.app_user_id || "";
+    const aliases: string[] = event.event?.aliases || [];
+
+    // Use app_user_id or first alias as our userId
+    const userId = appUserId || aliases[0];
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(200).json({ received: true });
+    }
+
+    const productId: string = event.event?.product_id || "";
+    const expiresAt: string | null = event.event?.expiration_at_ms
+      ? new Date(event.event.expiration_at_ms).toISOString()
+      : null;
+
+    // Map RevenueCat product_id to plan
+    function rcProductToPlan(pid: string): "monthly" | "annual" | "lifetime" {
+      if (pid.includes("annual") || pid.includes("yearly")) return "annual";
+      if (pid.includes("lifetime")) return "lifetime";
+      return "monthly";
+    }
+
+    const plan = rcProductToPlan(productId);
+    const lsId = `rc-${userId}-${productId}`;
+    const periodEnd = expiresAt || (plan === "lifetime"
+      ? new Date("2099-12-31").toISOString()
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
+
+    try {
+      switch (eventType) {
+        case "INITIAL_PURCHASE":
+        case "RENEWAL":
+        case "UNCANCELLATION":
+        case "NON_SUBSCRIPTION_PURCHASE":
+          await storage.upsertSubscription({
+            userId,
+            lemonSqueezyId: lsId,
+            orderId: event.event?.transaction_id || lsId,
+            plan,
+            status: "active",
+            currentPeriodEnd: periodEnd,
+          });
+          console.log(`[RC Webhook] ${eventType} → user=${userId} plan=${plan}`);
+          break;
+
+        case "CANCELLATION":
+          await storage.updateSubscriptionStatus(lsId, "cancelled");
+          console.log(`[RC Webhook] CANCELLATION → user=${userId}`);
+          break;
+
+        case "EXPIRATION":
+          await storage.updateSubscriptionStatus(lsId, "expired");
+          console.log(`[RC Webhook] EXPIRATION → user=${userId}`);
+          break;
+
+        case "BILLING_ISSUE":
+          // Keep active but log for monitoring
+          console.warn(`[RC Webhook] BILLING_ISSUE → user=${userId}`);
+          break;
+
+        default:
+          // PRODUCT_CHANGE, TRANSFER, etc. — no action needed
+          break;
+      }
+    } catch (err) {
+      console.error("[RC Webhook] Error processing event:", err);
+      return res.status(500).json({ error: "Internal error" });
+    }
+
+    return res.status(200).json({ received: true });
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

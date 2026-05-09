@@ -1,38 +1,29 @@
-import { type User, type InsertUser } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
+import { db } from "./db";
+import {
+  users, subscriptions, solanaSessions,
+  type User, type InsertUser, type Subscription, type SolanaSession,
+} from "@shared/schema";
 import { randomUUID } from "crypto";
 
-export interface Subscription {
-  id: string;
-  userId: string;
-  lemonSqueezyId: string;
-  orderId: string;
-  plan: "monthly" | "quarterly" | "annual" | "lifetime";
-  status: "active" | "cancelled" | "expired" | "paused";
-  currentPeriodEnd: string;
-  createdAt: string;
-  updatedAt: string;
-}
+// ─── Re-export types for routes.ts ──────────────────────────────────────────
+export type { User, InsertUser, Subscription, SolanaSession };
 
-export interface SolanaPaySession {
-  id: string;
-  userId: string;
-  reference: string;
-  plan: "quarterly" | "lifetime";
-  token: "usdc" | "sol";
-  amountUsdc: number;
-  amountSol?: number;
-  status: "pending" | "confirmed" | "expired";
-  createdAt: string;
-  expiresAt: string;
-}
-
+// ─── Storage interface ───────────────────────────────────────────────────────
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getSubscription(userId: string): Promise<Subscription | undefined>;
   getSubscriptionByLemonSqueezyId(lsId: string): Promise<Subscription | undefined>;
-  upsertSubscription(sub: Omit<Subscription, "id" | "createdAt" | "updatedAt">): Promise<Subscription>;
+  upsertSubscription(sub: {
+    userId: string;
+    lemonSqueezyId: string;
+    orderId: string;
+    plan: "monthly" | "quarterly" | "annual" | "lifetime";
+    status: "active" | "cancelled" | "expired" | "paused";
+    currentPeriodEnd: string;
+  }): Promise<Subscription>;
   updateSubscriptionStatus(lemonSqueezyId: string, status: Subscription["status"]): Promise<void>;
   createSolanaSession(data: {
     userId: string;
@@ -41,83 +32,99 @@ export interface IStorage {
     token: "usdc" | "sol";
     amountUsdc: number;
     amountSol?: number;
-  }): Promise<SolanaPaySession>;
-  getSolanaSession(reference: string): Promise<SolanaPaySession | undefined>;
+  }): Promise<SolanaSession>;
+  getSolanaSession(reference: string): Promise<SolanaSession | undefined>;
   confirmSolanaSession(reference: string): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private subscriptions: Map<string, Subscription>;
-  private solanaSessions: Map<string, SolanaPaySession>;
-
-  constructor() {
-    this.users = new Map();
-    this.subscriptions = new Map();
-    this.solanaSessions = new Map();
-  }
-
+// ─── PostgreSQL implementation ───────────────────────────────────────────────
+class DbStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return rows[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const rows = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return rows[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const rows = await db.insert(users).values({ ...insertUser, id }).returning();
+    return rows[0];
   }
 
   async getSubscription(userId: string): Promise<Subscription | undefined> {
-    return Array.from(this.subscriptions.values()).find(
-      (sub) => sub.userId === userId && sub.status === "active",
-    );
+    const rows = await db
+      .select()
+      .from(subscriptions)
+      .where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, "active")))
+      .limit(1);
+    return rows[0];
   }
 
   async getSubscriptionByLemonSqueezyId(lsId: string): Promise<Subscription | undefined> {
-    return Array.from(this.subscriptions.values()).find(
-      (sub) => sub.lemonSqueezyId === lsId,
-    );
+    const rows = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.lemonSqueezyId, lsId))
+      .limit(1);
+    return rows[0];
   }
 
-  async upsertSubscription(data: Omit<Subscription, "id" | "createdAt" | "updatedAt">): Promise<Subscription> {
+  async upsertSubscription(data: {
+    userId: string;
+    lemonSqueezyId: string;
+    orderId: string;
+    plan: "monthly" | "quarterly" | "annual" | "lifetime";
+    status: "active" | "cancelled" | "expired" | "paused";
+    currentPeriodEnd: string;
+  }): Promise<Subscription> {
+    const now = new Date();
+    const periodEnd = new Date(data.currentPeriodEnd);
+
     const existing = await this.getSubscriptionByLemonSqueezyId(data.lemonSqueezyId);
-    const now = new Date().toISOString();
 
     if (existing) {
-      const updated: Subscription = {
-        ...existing,
-        ...data,
-        updatedAt: now,
-      };
-      this.subscriptions.set(existing.id, updated);
-      return updated;
+      const rows = await db
+        .update(subscriptions)
+        .set({
+          userId: data.userId,
+          orderId: data.orderId,
+          plan: data.plan,
+          status: data.status,
+          currentPeriodEnd: periodEnd,
+          updatedAt: now,
+        })
+        .where(eq(subscriptions.id, existing.id))
+        .returning();
+      return rows[0];
     }
 
     const id = randomUUID();
-    const sub: Subscription = {
-      ...data,
-      id,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.subscriptions.set(id, sub);
-    return sub;
+    const rows = await db
+      .insert(subscriptions)
+      .values({
+        id,
+        userId: data.userId,
+        lemonSqueezyId: data.lemonSqueezyId,
+        orderId: data.orderId,
+        plan: data.plan,
+        status: data.status,
+        currentPeriodEnd: periodEnd,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    return rows[0];
   }
 
   async updateSubscriptionStatus(lemonSqueezyId: string, status: Subscription["status"]): Promise<void> {
-    const sub = await this.getSubscriptionByLemonSqueezyId(lemonSqueezyId);
-    if (sub) {
-      sub.status = status;
-      sub.updatedAt = new Date().toISOString();
-      this.subscriptions.set(sub.id, sub);
-    }
+    await db
+      .update(subscriptions)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(subscriptions.lemonSqueezyId, lemonSqueezyId));
   }
 
   async createSolanaSession(data: {
@@ -127,37 +134,44 @@ export class MemStorage implements IStorage {
     token: "usdc" | "sol";
     amountUsdc: number;
     amountSol?: number;
-  }): Promise<SolanaPaySession> {
+  }): Promise<SolanaSession> {
     const id = randomUUID();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 30 * 60 * 1000);
-    const session: SolanaPaySession = {
-      id,
-      userId: data.userId,
-      reference: data.reference,
-      plan: data.plan,
-      token: data.token,
-      amountUsdc: data.amountUsdc,
-      amountSol: data.amountSol,
-      status: "pending",
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-    };
-    this.solanaSessions.set(data.reference, session);
-    return session;
+
+    const rows = await db
+      .insert(solanaSessions)
+      .values({
+        id,
+        userId: data.userId,
+        reference: data.reference,
+        plan: data.plan,
+        token: data.token,
+        amountUsdc: String(data.amountUsdc),
+        amountSol: data.amountSol !== undefined ? String(data.amountSol) : null,
+        status: "pending",
+        createdAt: now,
+        expiresAt,
+      })
+      .returning();
+    return rows[0];
   }
 
-  async getSolanaSession(reference: string): Promise<SolanaPaySession | undefined> {
-    return this.solanaSessions.get(reference);
+  async getSolanaSession(reference: string): Promise<SolanaSession | undefined> {
+    const rows = await db
+      .select()
+      .from(solanaSessions)
+      .where(eq(solanaSessions.reference, reference))
+      .limit(1);
+    return rows[0];
   }
 
   async confirmSolanaSession(reference: string): Promise<void> {
-    const session = this.solanaSessions.get(reference);
-    if (session) {
-      session.status = "confirmed";
-      this.solanaSessions.set(reference, session);
-    }
+    await db
+      .update(solanaSessions)
+      .set({ status: "confirmed" })
+      .where(eq(solanaSessions.reference, reference));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DbStorage();
