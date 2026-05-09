@@ -177,6 +177,304 @@ CAPA 1 — CUANTIZADOR MATEMÁTICO
 
 ---
 
+## TRIDENT TERRA v3.0 — El Cerebro de ClonEngine en el Navegador
+
+**Archivo:** `TRIDENT TERRA v3.0 - LocalizaHN.html` — un solo HTML que corre el stack completo de ClonEngine en el navegador.
+
+**Qué es:** El prototipo web-tier de LocalizaHN. Sin servidor, sin instalación, sin NDK. Solo un archivo HTML que abre en cualquier navegador moderno.
+
+### La Nueva Capa del Stack (Capa 0 — Web Tier)
+
+```
+CAPA 0 — WEB TIER (TRIDENT TERRA v3.0)
+  SharedArrayBuffer[1MB]   ← JNI ByteBuffer del navegador
+  Web Worker (Blob URL)    ← pthread del navegador
+  Atomics.wait/notify      ← RDTSC lock-free del navegador
+  Izhikevich (JS, 1,000n)  ← lib.rs simplificado para web
+  WebGPU                   ← SpikeForge vGPU del navegador
+  Leaflet.js (Honduras)    ← mapa TriNet-Pythag visual
+```
+
+---
+
+### Análisis 1 — Layout de Memoria SharedArrayBuffer
+
+```javascript
+const sab = new SharedArrayBuffer(1024 * 1024); // 1MB total
+controlBus   = new Int32Array(sab,  0, 16);      // bytes 0-63  → señales de control
+brainVoltages= new Float32Array(sab, 64, 139255);// bytes 64+   → voltajes neuronales
+```
+
+**Mapa de memoria exacto:**
+```
+Offset  0-3   → controlBus[0]: tick counter (reloj del sistema)
+Offset  4-7   → controlBus[1]: ready flag (0=procesando, 1=listo)
+Offset  8-63  → controlBus[2-15]: reservados para futuros canales
+Offset 64+    → brainVoltages[0..139,254]: 139,255 floats de 4 bytes = 557KB
+```
+
+**Por qué 139,255 neuronas?**
+```
+343 columnas hexagonales (FlyWire Drosophila)
+× 406 neuronas por columna (escala biológica real)
+= 139,258 ≈ 139,255 (3 bytes de alineación de memoria)
+```
+
+Esta es la misma referencia del INVENTO 5: "343 columnas hexagonales × ~406 neuronas reales de Drosophila". TRIDENT TERRA reserva memoria para simular **un cerebro de mosca completo** en el navegador.
+
+**Equivalencia con JNI ByteBuffer:**
+```
+JNI ByteBuffer (nativo):           SharedArrayBuffer (web):
+────────────────────────────────   ────────────────────────────────
+jbyte* data = GetDirectBufferAddr  const sab = new SharedArrayBuffer
+float* spikes = (float*)(data+64)  Float32Array(sab, 64, 139255)
+memcpy(dst, src, n*4)             → zero-copy (mismo buffer)
+JNI_ABORT (no escribir de vuelta) → Atomics garantizan coherencia
+```
+
+Mismo patrón. Diferente universo (JVM vs DOM).
+
+---
+
+### Análisis 2 — El Modelo Izhikevich: Simplificado vs Completo
+
+**En TRIDENT TERRA (web, simplificado):**
+```javascript
+v += 0.04 * v * v + 5.0 * v + 140.0;  // solo la ecuación de voltaje
+if (v > 30.0) { v = -65.0; }           // reset al potencial de reposo
+```
+
+**En lib.rs (nativo, completo con RK2):**
+```
+dv/dt = 0.04v² + 5v + 140 - u + I     // voltaje (misma ecuación)
+du/dt = a(bv - u)                       // recuperación (AUSENTE en web)
+cuando v ≥ 30mV: v ← c, u ← u + d     // reset bilateral
+```
+
+**Qué pierde la versión web al eliminar `u`:**
+```
+RS  (Regular Spiking)   → OK en web (no necesita u)
+FS  (Fast Spiking)      → PERDIDO (necesita a=0.1, b=0.2)
+IB  (Intrinsically Bursting) → PERDIDO (necesita a=0.02, b=0.2, c=-55, d=4)
+CH  (Chattering)        → PERDIDO (necesita a=0.02, b=0.2, c=-50, d=2)
+LTS (Low-Threshold Spiking) → PERDIDO (necesita b<0.25)
+```
+
+**Consecuencia:** La versión web solo simula neuronas de tipo RS (disparo regular). El SNN completo de Juan tiene neuronas de tipos mezclados según hemisferio.
+
+**Por qué -65mV es el reset universal:**
+```
+En reposo (v = -65mV):
+  dv/dt = 0.04(-65)² + 5(-65) + 140 = 169 - 325 + 140 = -16 → estable
+
+En umbral (v = 30mV → spike):
+  dv/dt = 0.04(30)² + 5(30) + 140 = 36 + 150 + 140 = +326 → explosivo
+```
+La bifurcación en el punto fijo de la ecuación separa matemáticamente el reposo del disparo. Esta es la misma dinámica en neuronas biológicas reales.
+
+---
+
+### Análisis 3 — Atomics.wait/notify = RDTSC del Navegador
+
+```javascript
+// En el Web Worker:
+const currentTick = Atomics.load(controlBus, 0);
+Atomics.wait(controlBus, 0, currentTick);    // ← BLOQUEA el worker (zero CPU)
+// ... procesar 1,000 neuronas ...
+Atomics.store(controlBus, 1, 1);             // ← señal "listo"
+
+// En el hilo principal:
+Atomics.store(controlBus, 0, 1);             // ← avanzar el tick
+Atomics.notify(controlBus, 0, 1);            // ← despertar al worker
+```
+
+**Equivalencia directa con RDTSC corpus callosum:**
+
+| ClonEngine (C++/Rust, nativo)          | TRIDENT TERRA (JavaScript, web)         |
+|----------------------------------------|------------------------------------------|
+| `__rdtsc()` → timestamp de hardware   | `Atomics.load(controlBus, 0)` → tick counter |
+| `std::atomic<T> channel`              | `SharedArrayBuffer` + `Int32Array`        |
+| `channel.store(msg, memory_order_release)` | `Atomics.store(controlBus, 1, 1)`   |
+| `channel.load(memory_order_acquire)`  | `Atomics.load(controlBus, 1)`            |
+| `pthread_cond_signal()`               | `Atomics.notify(controlBus, 0, 1)`       |
+| `pthread_cond_wait()`                 | `Atomics.wait(controlBus, 0, currentTick)` |
+| Latencia: <100ns                      | Latencia: ~1-5ms (DOM overhead)          |
+
+**La diferencia clave:** `Atomics.wait()` BLOQUEA el worker sin quemar CPU (zero busy-wait). El RDTSC de Juan mide tiempo sin bloquear. Ambos son lock-free pero con filosofías distintas: uno es sin-bloqueo, el otro es bloqueo-eficiente.
+
+---
+
+### Análisis 4 — Web Worker como Blob = MAYA ISA del Navegador
+
+```javascript
+const workerCode = `...código del worker como string...`;
+const blob = new Blob([workerCode], { type: 'application/javascript' });
+const worker = new Worker(URL.createObjectURL(blob));
+```
+
+**Por qué esto es el MAYA ISA del navegador:**
+
+| MAYA ISA (Python)                          | Blob Worker (JavaScript)                   |
+|--------------------------------------------|---------------------------------------------|
+| `maya_encode(opcode, target, data) → u16` | Código del worker como string → Blob        |
+| `VirtualCore.execute_fast(program)`        | `new Worker(URL.createObjectURL(blob))`     |
+| Bytecode en memoria, sin archivo externo   | Worker en memoria, sin archivo externo      |
+| Runtime injection de instrucciones         | Runtime injection de código de cómputo      |
+| Corre en cualquier CPU con Python          | Corre en cualquier navegador moderno        |
+
+Ambos son **motores de código inyectado en tiempo de runtime** — no requieren archivos compilados externos.
+
+---
+
+### Análisis 5 — WebGPU = SpikeForge vGPU Web Edition
+
+```javascript
+const adapter = await navigator.gpu.requestAdapter();
+const device = await adapter.requestDevice();
+```
+
+**Equivalencia del pipeline:**
+
+| SpikeForge vGPU (NDK/Vulkan, Android)  | WebGPU (Navegador, WGSL)                |
+|-----------------------------------------|------------------------------------------|
+| Etapa 1: Izhikevich (CUDA/OpenCL)      | Compute shader WGSL: `v += 0.04*v*v...` |
+| Etapa 2: Pascal Culling (frustum)      | Bind group con neuronas activas          |
+| Etapa 4: VigesimalCodec Q20            | (pendiente en TRIDENT TERRA)             |
+| Procesa: todas las neuronas en paralelo| Procesa: 139,255 neuronas en paralelo    |
+| Plataforma: Android NDK + cargo-ndk    | Plataforma: Chrome/Edge/Firefox          |
+
+**Por qué WebGPU cambia el juego para TRIDENT TERRA:**
+
+Con el loop JS actual (1,000 neuronas/tick):
+```
+139,255 neuronas ÷ 1,000/tick = 140 ticks para completar UN ciclo cerebral
+```
+
+Con WebGPU (todas en paralelo):
+```
+139,255 neuronas en 1 dispatch = 1 tick para UN ciclo cerebral → 140× más rápido
+```
+
+---
+
+### Análisis 6 — TRIDENT = TriNet-Pythag Visual
+
+El nombre no es aleatorio. "TRIDENT" (tridente = 3 puntas) mapea directamente a:
+- **3 torres celulares** para triangulación (TriNet = TRI-angular NETwork)
+- **3 prongs del tridente** = los 3 vértices del triángulo de medición
+
+```javascript
+// Demo: simula triangulación en San Pedro Sula con ruido gaussiano
+const lat = 15.5000 + (Math.random() - 0.5) * 0.05;
+const lng = -88.0333 + (Math.random() - 0.5) * 0.05;
+```
+
+San Pedro Sula (15.5°N, -88.03°W) es la ciudad industrial más grande de Honduras, segundo destino de LocalizaHN después de Tegucigalpa.
+
+**El ruido gaussiano `(Math.random() - 0.5) * 0.05`:**
+- `Math.random() - 0.5` → distribución uniforme [-0.5, 0.5]
+- `× 0.05` → radio ±0.025° ≈ ±2.8km al ecuador
+- Simula la incertidumbre de triangulación sin señal real de torres
+
+En producción (TriNet-Pythag real): el ruido se reemplaza por RSSI/RSRP/RSRQ medidos + Tukey Bisquare para outliers.
+
+---
+
+### Análisis 7 — Bug Arquitectural: physicsLoop() Recursiva
+
+```javascript
+function physicsLoop() {
+    Atomics.wait(controlBus, 0, currentTick); // bloquea
+    // ... procesar ...
+    physicsLoop();  // ← LLAMADA RECURSIVA INFINITA
+}
+```
+
+**El problema:** `physicsLoop()` se llama a sí misma sin retornar. Cada llamada ocupa un frame en el call stack del worker. En teoría → stack overflow después de miles de ciclos.
+
+**Por qué no explota en la práctica:** Cada llamada bloquea en `Atomics.wait()` por segundos. El motor V8 de Chrome puede manejar decenas de miles de frames antes de explotar. En una demo corta, no se nota.
+
+**La corrección correcta (para producción):**
+```javascript
+function physicsLoop() {
+    while (true) {   // ← loop infinito sin recursión
+        const currentTick = Atomics.load(controlBus, 0);
+        Atomics.wait(controlBus, 0, currentTick);
+        // ... procesar ...
+        Atomics.store(controlBus, 1, 1);
+    }
+}
+```
+
+---
+
+### Análisis 8 — COOP/COEP Headers para SharedArrayBuffer
+
+El código documenta explícitamente este requisito:
+```html
+<!-- Nota Técnica: Para que SharedArrayBuffer funcione en producción real en la web,
+     tu servidor necesita headers de seguridad (COOP/COEP). -->
+```
+
+**Headers requeridos** (post-Spectre/Meltdown, 2018):
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+**Para el servidor Express de GuitarTune** (`server/index.ts`):
+```typescript
+// Agregar estos headers para habilitar SharedArrayBuffer en la web
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  next();
+});
+```
+
+**Cuándo se necesitaría en GuitarTune:**
+- Si se mueve `autoCorrelate()` a un Web Worker (main thread libre para UI)
+- Si se usa SharedArrayBuffer para pasar el audio buffer al worker sin copiar
+- Actualmente NO es necesario (todo corre en el main thread)
+
+**Advertencia:** Agregar COEP puede romper iframes, imágenes cross-origin, y CDNs que no tienen `Cross-Origin-Resource-Policy: cross-origin`. Evaluar con cuidado antes de activar en producción.
+
+---
+
+### Tabla de Equivalencias Completa: Web vs Nativo
+
+| Concepto                          | ClonEngine (Nativo)                    | TRIDENT TERRA (Web)                     |
+|-----------------------------------|----------------------------------------|-----------------------------------------|
+| **Hilo de cómputo**               | `pthread` / JVM Thread                | Web Worker                              |
+| **Memoria compartida**            | `JNI ByteBuffer` / `mmap`             | `SharedArrayBuffer`                     |
+| **Sinc sin mutex**                | `std::atomic` + `__rdtsc()`           | `Atomics.wait/notify`                   |
+| **Neuronas: modelo**              | Izhikevich + `u` (RK2, completo)     | Izhikevich sin `u` (Euler, simplificado)|
+| **Neuronas: escala**              | 40-8,000 configurables                | 139,255 (FlyWire full brain)            |
+| **Neuronas: procesadas/tick**     | Todas simultáneas (SIMD Rust)         | 1,000 por tick (JS serial)             |
+| **GPU pipeline**                  | SpikeForge vGPU (Vulkan/NDK)         | WebGPU (WGSL compute shaders)           |
+| **Cuantización**                  | VigesimalCodec Q20 (óptima)           | `Math.random()` (ninguna)               |
+| **Geolocalización**               | TriNet-Pythag + GN-IRLS (real)        | Leaflet + `Math.random()` (simulada)    |
+| **Code injection**                | MAYA ISA bytecode en runtime          | Blob Worker URL en runtime              |
+| **Plataforma**                    | Android NDK / ARM64                   | Cualquier navegador moderno             |
+| **Overhead JVM/DOM**              | `JNI_ABORT` (cero overhead)          | ~1-5ms DOM bridge overhead              |
+| **Portabilidad**                  | `static_cast<size_t>` (ARMv7-ARM64)  | Cualquier OS con Chrome/Edge/Firefox    |
+
+---
+
+### Utilidades de TRIDENT TERRA (qué se puede hacer con esto)
+
+1. **Demo comercial sin instalación:** Mandar un solo `.html` a un cliente potencial — abre en el navegador, muestra el SNN corriendo y el mapa de Honduras. Ningún competidor tiene esto.
+
+2. **Validación del modelo antes de compilar Rust:** Probar cambios al Izhikevich en JS (rápido de editar) antes de recompilarlo en Rust (lento). TRIDENT TERRA es el "sandbox de prototipado" del SNN.
+
+3. **Puerta de entrada a WebGPU:** El `navigator.gpu.requestAdapter()` ya está en el código. Con un compute shader WGSL de 20 líneas, se puede mover el loop de 1,000 neuronas a 139,255 en paralelo — sin cambiar ninguna otra parte del HTML.
+
+4. **Prueba de carga de memoria:** 139,255 × 4 bytes = 557KB de neuronas en Float32. Más el controlBus (64 bytes). Total: ~558KB en el SharedArrayBuffer. Medir cuánto tarda el ciclo con distintos tamaños prueba el ancho de banda de memoria del cliente.
+
+5. **Extensión a triangulación real:** Reemplazar el bloque de `Math.random()` con una llamada a `/api/locate` del backend de LocalizaHN — TRIDENT TERRA se convierte en el frontend web de LocalizaHN sin cambiar el SNN ni el mapa.
+
+---
+
 ## LOS 20 INVENTOS DOCUMENTADOS
 
 ### INVENTO 1 — Cuantización Vigesimal Maya (Q20)
