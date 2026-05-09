@@ -252,6 +252,9 @@ export default function PitchDetectorBridge({
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         mediaCapturePermissionGrantType="grant"
+        onPermissionRequest={(request: any) => {
+          request.grant(request.resources);
+        }}
         style={{ width: 1, height: 1, opacity: 0 }}
       />
     </View>

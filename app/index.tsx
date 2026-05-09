@@ -419,8 +419,15 @@ export default function TunerScreen() {
       analyserRef.current = analyser;
       setIsListening(true);
       detectPitch();
-    } catch {
-      setPermissionDenied(true);
+    } catch (err: any) {
+      const msg = err?.name || err?.message || "unknown";
+      if (msg === "NotAllowedError" || msg.includes("denied") || msg.includes("Permission")) {
+        setPermissionDenied(true);
+      } else if (msg === "NotFoundError" || msg.includes("device") || msg.includes("found")) {
+        setPermissionDenied(true);
+      } else {
+        setPermissionDenied(true);
+      }
     }
   }, []);
 
