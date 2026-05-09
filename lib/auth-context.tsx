@@ -44,12 +44,34 @@ async function hashPassword(password: string): Promise<string> {
   return digest;
 }
 
+const ADMIN_USERNAME = "juanjose";
+const ADMIN_DISPLAY = "Juan José";
+
+async function seedAdminUser() {
+  try {
+    const users = await getStoredUsers();
+    if (!users[ADMIN_USERNAME]) {
+      const hash = await hashPassword("Frontier2021!");
+      users[ADMIN_USERNAME] = {
+        id: "admin-juanjose-klonengine-2025",
+        username: ADMIN_DISPLAY,
+        passwordHash: hash,
+        isPremium: true,
+        createdAt: "2025-01-01T00:00:00.000Z",
+      };
+      await saveUsers(users);
+    }
+  } catch (e) {
+    console.error("Admin seed failed:", e);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadCurrentUser();
+    seedAdminUser().then(() => loadCurrentUser());
   }, []);
 
   async function loadCurrentUser() {
