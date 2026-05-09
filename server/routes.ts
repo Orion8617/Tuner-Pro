@@ -47,6 +47,10 @@ function getPlanExpiry(plan: "quarterly" | "lifetime"): string {
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
+  app.get("/klonos-monitor", (_req: Request, res: Response) => {
+    res.sendFile("klonos-monitor.html", { root: "./server/templates" });
+  });
+
   app.get("/api/subscription/status", async (req: Request, res: Response) => {
     const userId = req.query.userId as string;
     if (!userId) return res.status(400).json({ error: "userId is required" });

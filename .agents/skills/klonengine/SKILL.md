@@ -2137,6 +2137,40 @@ error_max = (max - min) / 40 = 20 / 40 = 0.5 metros        // error ≤ 0.5m gar
 // Adaptar: cada octava dividida en 20 niveles = 3 cents/nivel de resolución
 ```
 
+**Sistema de Glifo Maya — Codificación Auténtica Verificada e Implementada:**
+```
+Símbolos (del sistema vigesimal maya real):
+  ◎ = concha (cero maya) — nivel 0
+  •  = punto (1 unidad)
+  ━  = barra (5 unidades)
+
+Tabla completa 0-19 (única, sin ambigüedad):
+  0  → ◎          5  → ━          10 → ━━          15 → ━━━
+  1  → •           6  → ━ •        11 → ━━ •         16 → ━━━ •
+  2  → ••          7  → ━ ••       12 → ━━ ••        17 → ━━━ ••
+  3  → •••         8  → ━ •••      13 → ━━ •••       18 → ━━━ •••
+  4  → ••••        9  → ━ ••••     14 → ━━ ••••      19 → ━━━ ••••
+
+Implementación JS (levelToMayaGlyph):
+  if level === 0: return '◎'
+  bars = floor(level / 5)     // 0-3 barras
+  dots = level % 5            // 0-4 puntos
+  return '━'.repeat(bars) + (bars>0&&dots>0?' ':'') + '•'.repeat(dots)
+
+TX Compacto (10-bit visual):
+  compactTransmit(levelX, levelY) = levelToMayaGlyph(X) + ' ┃ ' + levelToMayaGlyph(Y)
+  Ejemplo: coordenada (-3.5m, +7.2m) en grid -10/+10:
+    X: norm=0.325 → level=6 → ━ •
+    Y: norm=0.86  → level=17 → ━━━ ••
+    TX: "━ • ┃ ━━━ ••"
+```
+
+**Por qué el glifo Maya es mejor que hex para este dominio:**
+- Hexadecimal (0-F): 16 niveles, abstracto, sin significado visual
+- Maya Vigesimal (0-19): 20 niveles, visualmente proporcional, • = unidad, ━ = 5×
+- Un operador puede leer "━━ •••" y SABER que es nivel 13 (10+3) sin tabla de lookup
+- Los Mayas diseñaron un sistema que un humano puede computar con los dedos
+
 **6 nodos de sensor en el demo (hexagonal con centro):**
 ```javascript
 const LMNodes = [

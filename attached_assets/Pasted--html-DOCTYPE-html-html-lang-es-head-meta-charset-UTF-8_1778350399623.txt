@@ -1,0 +1,848 @@
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KlonOS Neural Bus Monitor | Private Cloud 5.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap');
+        body { margin: 0; background-color: #030508; color: #a26bff; font-family: 'Fira Code', monospace; overflow: hidden; display: flex; flex-direction: column; height: 100vh;}
+        
+        #top-bar { height: 60px; background: rgba(3, 5, 10, 0.9); border-bottom: 1px solid #0055ff; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; z-index: 10; backdrop-filter: blur(10px);}
+        #main-content { display: flex; flex: 1; overflow: hidden; position: relative; }
+        
+        .panel { background: rgba(0, 0, 0, 0.7); border: 1px solid #1a3366; padding: 15px; display: flex; flex-direction: column; z-index: 10; backdrop-filter: blur(5px); box-shadow: 0 0 20px rgba(0,85,255,0.1); overflow-y: auto;}
+        #left-panel { width: 320px; border-right: 1px solid #0055ff; }
+        #right-panel { width: 380px; border-left: 1px solid #ff00ff; }
+        #center-view { flex: 1; position: relative; }
+        
+        h1 { margin: 0; color: #0088ff; text-shadow: 0 0 10px rgba(0,136,255,0.5); font-size: 1.2rem; text-transform: uppercase;}
+        h2 { font-size: 0.75rem; color: #a26bff; text-transform: uppercase; border-bottom: 1px solid #330066; padding-bottom: 4px; margin-bottom: 10px; margin-top: 15px;}
+        h2:first-child { margin-top: 0; }
+        
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.8rem; }
+        .stat-label { color: #5588cc; }
+        .stat-value { color: #00ffff; font-weight: bold; }
+        
+        .modulator-bar { height: 6px; background: #112244; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+        .modulator-fill { height: 100%; transition: width 0.1s linear; }
+        .dopamine { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
+        .serotonin { background: #ff00ff; box-shadow: 0 0 8px #ff00ff; }
+        .acetylcholine { background: #ffff00; box-shadow: 0 0 8px #ffff00; }
+        .norepinephrine { background: #ff3300; box-shadow: 0 0 8px #ff3300; }
+        
+        .reward-log { font-size: 0.7rem; margin-bottom: 8px; padding-left: 8px; border-left: 2px solid #ff00ff; background: rgba(255,0,255,0.05); padding-top: 4px; padding-bottom: 4px;}
+        .reward-positive { color: #00ffcc; }
+        .reward-negative { color: #ff3344; }
+        .reward-source { color: #a26bff; font-weight: bold;}
+        
+        .math-block { font-family: 'Times New Roman', serif; font-style: italic; font-size: 0.75rem; color: #00ffff; background: #001122; padding: 6px; border-radius: 4px; border: 1px solid #0055aa; text-align: left; line-height: 1.4; margin-bottom: 8px;}
+        .math-highlight { color: #ff00ff; font-weight: bold; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #0055ff; border-radius: 2px;}
+        
+        /* Scanline Overlay */
+        .scanlines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 4px, 3px 100%; }
+        
+        #webgl-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="top-bar">
+        <div>
+            <h1>Shared Neural Signal Bus</h1>
+            <div class="text-[10px] text-gray-400 mt-1">vGPU-011 | Master Rail | Robust 2-Pass LM + RANSAC</div>
+        </div>
+        <div class="flex gap-4">
+            <div class="text-right">
+                <div class="text-[9px] text-blue-500 uppercase font-bold">Bus Status</div>
+                <div class="text-sm font-bold text-green-400" id="bus-status">ACTIVE_DMA</div>
+            </div>
+            <div class="text-right">
+                <div class="text-[9px] text-magenta-500 uppercase font-bold">Tick Rate</div>
+                <div class="text-sm font-bold text-magenta-400" id="tick-rate">0 Hz</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <!-- Panel Izquierdo: Telemetría y Neuromoduladores -->
+        <div id="left-panel" class="panel">
+            <h2>System Config</h2>
+            <div class="stat-row"><span class="stat-label">Organism:</span> <span class="stat-value" id="cfg-org">--</span></div>
+            <div class="stat-row"><span class="stat-label">Neurons:</span> <span class="stat-value" id="cfg-neu">--</span></div>
+            <div class="stat-row"><span class="stat-label">Connectome:</span> <span class="stat-value" id="cfg-con">--</span></div>
+
+            <h2>Neural Telemetry</h2>
+            <div class="stat-row"><span class="stat-label">Spike Count:</span> <span class="stat-value" id="tel-spikes">0</span></div>
+            <div class="stat-row"><span class="stat-label">Entropy:</span> <span class="stat-value text-yellow-400" id="tel-ent">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Coherence:</span> <span class="stat-value text-green-400" id="tel-coh">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Burst Rate:</span> <span class="stat-value" id="tel-burst">0.0 Hz</span></div>
+            <div class="stat-row"><span class="stat-label">GABA Level:</span> <span class="stat-value text-red-400" id="tel-gaba">1.00</span></div>
+            <div class="stat-row"><span class="stat-label">Field Amp:</span> <span class="stat-value" id="tel-amp">1.00</span></div>
+
+            <h2>Neuromodulators</h2>
+            <div class="mt-2">
+                <div class="stat-row mb-1"><span class="stat-label">Dopamine</span> <span class="stat-value" id="val-dop">0.50</span></div>
+                <div class="modulator-bar"><div class="modulator-fill dopamine" id="bar-dop" style="width: 50%;"></div></div>
+            </div>
+            <div class="mt-3">
+                <div class="stat-row mb-1"><span class="stat-label">Serotonin</span> <span class="stat-value" id="val-ser">0.50</span></div>
+                <div class="modulator-bar"><div class="modulator-fill serotonin" id="bar-ser" style="width: 50%;"></div></div>
+            </div>
+            <div class="mt-3">
+                <div class="stat-row mb-1"><span class="stat-label">Acetylcholine</span> <span class="stat-value" id="val-ace">0.50</span></div>
+                <div class="modulator-bar"><div class="modulator-fill acetylcholine" id="bar-ace" style="width: 50%;"></div></div>
+            </div>
+            <div class="mt-3">
+                <div class="stat-row mb-1"><span class="stat-label">Norepinephrine</span> <span class="stat-value" id="val-nor">0.30</span></div>
+                <div class="modulator-bar"><div class="modulator-fill norepinephrine" id="bar-nor" style="width: 30%;"></div></div>
+            </div>
+
+            <h2 class="mt-4 text-orange-400">Environmental Telemetry (NEAT)</h2>
+            <div class="math-block" style="border-color: #aa5500; color: #ffaa00; font-size: 0.7rem;">
+                b<sub class="text-[8px]">th</sub> = clip((temp-32)/(120-32)·100, 0, 100)<br>
+                b<sub class="text-[8px]">mo</sub> = clip(hum·(1+rain·0.05), 0, 100)<br>
+                <span class="math-highlight text-white">neat = clip(round(Σ w<sub class="text-[8px]">i</sub>·b<sub class="text-[8px]">i</sub>), 0, 100)</span>
+            </div>
+            
+            <div class="stat-row"><span class="stat-label">Thermal (b_th):</span> <span class="stat-value text-red-500" id="env-bthermal">0.00%</span></div>
+            <div class="stat-row"><span class="stat-label">Moisture (b_mo):</span> <span class="stat-value text-cyan-400" id="env-bmoisture">0.00%</span></div>
+            <div class="stat-row"><span class="stat-label">Kinetic (b_ki):</span> <span class="stat-value text-yellow-400" id="env-bkinetic">0.00%</span></div>
+            <div class="stat-row"><span class="stat-label">Pressure (b_pr):</span> <span class="stat-value text-purple-400" id="env-bpressure">0.00%</span></div>
+            
+            <div class="border-t border-gray-800 my-2"></div>
+            <div class="stat-row">
+                <span class="stat-label text-white uppercase tracking-widest font-bold">NEAT Index:</span> 
+                <span class="stat-value text-green-400" id="env-neat" style="font-size: 1.2rem; text-shadow: 0 0 10px #00ff00;">0%</span>
+            </div>
+        </div>
+
+        <!-- Visor 3D Central -->
+        <div id="center-view">
+            <div class="scanlines"></div>
+            <div id="webgl-canvas"></div>
+            <div class="absolute bottom-4 left-4 text-[10px] text-gray-500 uppercase tracking-widest bg-black bg-opacity-50 px-2 py-1 rounded">
+                Master Rail: Axon Bundle Visualization (WebGL)
+            </div>
+        </div>
+
+        <!-- Panel Derecho: LM + RANSAC -->
+        <div id="right-panel" class="panel">
+            <h2>Auto-Reward System</h2>
+            <div class="stat-row mb-2">
+                <span class="stat-label">Global Reward Signal:</span> 
+                <span class="stat-value" id="reward-signal" style="font-size: 1.2rem;">0.00</span>
+            </div>
+            
+            <div class="text-[10px] text-magenta-600 uppercase font-bold mb-2 mt-2 border-b border-magenta-900 pb-1">Reward Stream Event Log</div>
+            <div id="reward-log-container" class="flex-1 overflow-y-auto pr-2 max-h-[100px]">
+                <!-- Logs injected here -->
+            </div>
+
+            <h2 class="mt-4 text-cyan-400">Robust 2-Pass LM Engine</h2>
+            
+            <!-- Bloque Matemático del RANSAC / MAD -->
+            <div class="math-block">
+                <span class="text-gray-400">// Pass 1: MAD Outlier Rejection O(N log N)</span><br>
+                resid<sub class="text-[8px]">i</sub> = |‖p̂-p<sub class="text-[8px]">i</sub>‖ - R<sub class="text-[8px]">i</sub>|<br>
+                median_r = sorted(resid)[N//2]<br>
+                threshold = max(3·median_r, 20m)<br>
+                Keep AP<sub class="text-[8px]">i</sub> if resid<sub class="text-[8px]">i</sub> ≤ threshold<br>
+                <span class="text-gray-400">// Pass 2: Pruned NLS (min 3 APs)</span><br>
+                <span class="text-gray-400">// Pass 3: O(1) Geometric Classifier</span><br>
+                ratio = d<sub class="text-[8px]">max</sub> / d<sub class="text-[8px]">min</sub> → <span class="math-highlight">Isosceles | Scalene | Cross</span><br>
+                <span class="text-gray-400">// Pass 4: Bilateral Coupling (Opposite APs)</span><br>
+                if |θ<sub class="text-[8px]">i</sub> - θ<sub class="text-[8px]">j</sub>| > 2.5 rad: ΔR += κ(err<sub class="text-[8px]">avg</sub> - err<sub class="text-[8px]">i</sub>)
+            </div>
+            
+            <div class="stat-row"><span class="stat-label">Active Sensors (N):</span> <span class="stat-value text-white" id="lm-sensors">6 / 6</span></div>
+            <div class="stat-row"><span class="stat-label">Median Resid (MAD):</span> <span class="stat-value text-yellow-400" id="lm-mad">0.00m</span></div>
+            <div class="stat-row"><span class="stat-label">Outliers Culled:</span> <span class="stat-value text-red-500" id="lm-culled">0</span></div>
+            
+            <div class="border-t border-gray-800 my-2"></div>
+            
+            <div class="stat-row"><span class="stat-label">True Origin [X, Y]:</span> <span class="stat-value text-magenta-400" id="lm-coord">[0.00, 0.00]</span></div>
+            <div class="stat-row"><span class="stat-label">Convergence ‖Δp‖:</span> <span class="stat-value text-green-400" id="lm-norm">0.000m</span></div>
+            <div class="stat-row"><span class="stat-label">GDOP (Geometry):</span> <span class="stat-value" id="lm-gdop">0.00</span></div>
+            <div class="stat-row"><span class="stat-label">Topology O(1):</span> <span class="stat-value" id="lm-topo">--</span></div>
+            <div class="stat-row"><span class="stat-label">Bilateral Coupling:</span> <span class="stat-value text-cyan-400" id="lm-couple">--</span></div>
+            <div class="stat-row"><span class="stat-label">Total Passes/Iters:</span> <span class="stat-value" id="lm-iters">0</span></div>
+
+            <h2 class="mt-4 text-purple-400">Maya Base-20 Quantization</h2>
+            <div class="math-block">
+                level = clip(floor(norm·20), 0, 19)<br>
+                dequant = min + (level+0.5)/20·(max-min)<br>
+                <span class="text-gray-400">// 6.4× compression (64-bit float → 5-bit)</span>
+            </div>
+            <div class="stat-row"><span class="stat-label">Quantized [X, Y]:</span> <span class="stat-value text-white" id="maya-level">[--, --]</span></div>
+            <div class="stat-row"><span class="stat-label">Dequantized [X, Y]:</span> <span class="stat-value text-cyan-400" id="maya-dequant">[0.00, 0.00]</span></div>
+            <div class="stat-row"><span class="stat-label">Max Error Bound:</span> <span class="stat-value text-yellow-400" id="maya-error">0.00m</span></div>
+            <div class="stat-row"><span class="stat-label">Compression:</span> <span class="stat-value text-green-400">6.4x (10-bit total)</span></div>
+
+            <h2 class="mt-4">Episodic Memory</h2>
+            <div class="stat-row"><span class="stat-label">Episodic Count:</span> <span class="stat-value" id="epi-count">0</span></div>
+            <div class="stat-row"><span class="stat-label">Best Fly Genome:</span> <span class="stat-value text-cyan-400" id="fly-genome">Pending...</span></div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 LEVENBERG-MARQUARDT TRILATERATION ENGINE (ROBUST 2-PASS)
+        // ═══════════════════════════════════════════════════════════
+        class LMEngine {
+            // 🚀 TOQUE FINAL: Geometric Dilution of Precision O(N)
+            static calculateGDOP(sensors, p) {
+                let a = 0, b = 0, d = 0;
+                for (let i = 0; i < sensors.length; i++) {
+                    let dx = p.x - sensors[i].x;
+                    let dy = p.y - sensors[i].y;
+                    let dist = Math.sqrt(dx*dx + dy*dy) || 0.0001;
+                    let u = dx / dist; // Unit vector X
+                    let v = dy / dist; // Unit vector Y
+                    
+                    // H^T * H Accumulation
+                    a += u * u;
+                    b += u * v;
+                    d += v * v;
+                }
+                
+                // det(H^T H) = ad - bc (where c = b)
+                let det = (a * d) - (b * b);
+                
+                if (Math.abs(det) < 1e-10) return 99.0; // Singular / Collinear
+                
+                // Trace of Inverse: (a + d) / det
+                let traceInv = (a + d) / det;
+                if (traceInv < 0) return 99.0;
+                
+                return Math.sqrt(traceInv);
+            }
+
+            // 🚀 ARTE A COSTO CERO: Clasificador Geométrico O(1)
+            static classifyGeometry(sensors) {
+                if (sensors.length < 3) return { shape: 'Unknown', quality: 0.0, ratio: 0 };
+                
+                // Extraer top-3 APs (ya podados y limpios de outliers)
+                let s0 = sensors[0], s1 = sensors[1], s2 = sensors[2];
+                
+                let d01 = Math.sqrt(Math.pow(s0.x - s1.x, 2) + Math.pow(s0.y - s1.y, 2));
+                let d02 = Math.sqrt(Math.pow(s0.x - s2.x, 2) + Math.pow(s0.y - s2.y, 2));
+                let d12 = Math.sqrt(Math.pow(s1.x - s2.x, 2) + Math.pow(s1.y - s2.y, 2));
+
+                let sides = [d01, d02, d12].sort((a, b) => a - b);
+                let ratio = sides[2] / (sides[0] || 0.0001); // d_max / d_min
+
+                if (ratio < 2.0) return { shape: 'Isosceles', quality: 1.0, ratio };
+                if (ratio <= 4.0) return { shape: 'Scalene', quality: 0.6, ratio };
+                return { shape: 'Cross', quality: 0.3, ratio };
+            }
+
+            // 🚀 ARTE A COSTO CERO: Acoplamiento Bilateral de Errores (Opposite Sides)
+            static applyBilateralCoupling(sensors, distances, p_est) {
+                let n = sensors.length;
+                let adj = new Array(n).fill(0);
+                let err = new Array(n).fill(0);
+                let theta = new Array(n).fill(0);
+                const kappa = 0.3; // Coupling constant
+
+                for (let i = 0; i < n; i++) {
+                    let dx = p_est.x - sensors[i].x;
+                    let dy = p_est.y - sensors[i].y;
+                    err[i] = Math.sqrt(dx*dx + dy*dy) - distances[i];
+                    theta[i] = Math.atan2(dy, dx);
+                }
+
+                let coupledPairs = 0;
+
+                for (let i = 0; i < n; i++) {
+                    for (let j = i + 1; j < n; j++) {
+                        let dTheta = Math.abs(theta[i] - theta[j]);
+                        if (dTheta > Math.PI) dTheta = 2 * Math.PI - dTheta;
+
+                        if (dTheta > 2.5) { // APs en lados opuestos (> 143 grados)
+                            let avg_err = (err[i] + err[j]) / 2.0;
+                            adj[i] += kappa * (avg_err - err[i]);
+                            adj[j] += kappa * (avg_err - err[j]);
+                            coupledPairs++;
+                        }
+                    }
+                }
+
+                // Ajustamos las mediciones de distancia originales con el offset acoplado
+                let coupledDistances = distances.map((d, i) => d + adj[i]);
+                return { coupledDistances, coupledPairs };
+            }
+
+            // 🚀 ARTE A COSTO CERO: Cuantización Base-20 Maya (Compresión a 5-bits)
+            static quantizeBase20(val, min = -10, max = 10) {
+                let norm = (val - min) / (max - min);
+                let level = Math.max(0, Math.min(19, Math.floor(norm * 20))); // 0 a 19 cabe en 5 bits
+                let dequant = min + ((level + 0.5) / 20.0) * (max - min);
+                let error = Math.abs(val - dequant);
+                return { level, dequant, error };
+            }
+
+            // Pasada de resolución estándar LM
+            static solvePass(sensors, distances, initialGuess = {x: 0, y: 0}) {
+                let p = { x: initialGuess.x, y: initialGuess.y };
+                let lambda = 0.1;
+                const maxIter = 50;
+                const tolerance = 0.01; 
+                let normDp = 999;
+                let iter = 0;
+
+                for (iter = 0; iter < maxIter; iter++) {
+                    let r = []; 
+                    let J = []; 
+                    
+                    for (let i = 0; i < sensors.length; i++) {
+                        let s = sensors[i];
+                        let dx = p.x - s.x;
+                        let dy = p.y - s.y;
+                        let dist = Math.sqrt(dx*dx + dy*dy) || 0.0001;
+                        
+                        r.push(dist - distances[i]);
+                        J.push([dx/dist, dy/dist]);
+                    }
+
+                    let JTJ = [[0, 0], [0, 0]];
+                    let JTr = [0, 0];
+
+                    for (let i = 0; i < sensors.length; i++) {
+                        JTJ[0][0] += J[i][0] * J[i][0];
+                        JTJ[0][1] += J[i][0] * J[i][1];
+                        JTJ[1][0] += J[i][1] * J[i][0];
+                        JTJ[1][1] += J[i][1] * J[i][1];
+
+                        JTr[0] += J[i][0] * r[i];
+                        JTr[1] += J[i][1] * r[i];
+                    }
+
+                    JTJ[0][0] += lambda;
+                    JTJ[1][1] += lambda;
+
+                    let det = JTJ[0][0]*JTJ[1][1] - JTJ[0][1]*JTJ[1][0];
+                    if (Math.abs(det) < 1e-10) break; 
+
+                    let invJTJ = [
+                        [JTJ[1][1]/det, -JTJ[0][1]/det],
+                        [-JTJ[1][0]/det, JTJ[0][0]/det]
+                    ];
+
+                    let dpX = invJTJ[0][0]*JTr[0] + invJTJ[0][1]*JTr[1];
+                    let dpY = invJTJ[1][0]*JTr[0] + invJTJ[1][1]*JTr[1];
+
+                    p.x -= dpX;
+                    p.y -= dpY;
+
+                    normDp = Math.sqrt(dpX*dpX + dpY*dpY);
+                    if (normDp < tolerance) break;
+                    lambda = Math.max(lambda / 2, 1e-6);
+                }
+                return { p, iter: iter+1, lambda, error: normDp };
+            }
+
+            // 🚀 TOQUE FINAL: Robust NLS with RANSAC-style pruning
+            static solveRobust(sensors, distances) {
+                // PASS 1: Resolución con todos los sensores (incluyendo valores atípicos)
+                let pass1 = this.solvePass(sensors, distances);
+
+                // Calcular residual absoluto: r_i = |‖p̂ - p_i‖ - R_i|
+                let residuals = sensors.map((s, i) => {
+                    let dx = pass1.p.x - s.x;
+                    let dy = pass1.p.y - s.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    return { index: i, resid: Math.abs(dist - distances[i]) };
+                });
+
+                // Ordenamiento O(N log N)
+                let sortedResid = [...residuals].sort((a, b) => a.resid - b.resid);
+                
+                // median_r = sorted(resid)[N//2]
+                let median_r = sortedResid[Math.floor(sortedResid.length / 2)].resid;
+
+                // threshold = max(3·median_r, 20m)
+                // (Escalado para nuestra malla local de +/- 8: 20m equivale aprox a 2.0 unidades)
+                let threshold = Math.max(3 * median_r, 2.0);
+
+                // Keep AP_i if resid_i <= threshold
+                let keepIndices = residuals.filter(r => r.resid <= threshold).map(r => r.index);
+
+                // Fallback de geometría: >=3 APs always kept
+                if (keepIndices.length < 3) {
+                    keepIndices = sortedResid.slice(0, 3).map(r => r.index);
+                }
+
+                let culledCount = sensors.length - keepIndices.length;
+
+                // Si no hay outliers destructivos, retornar Pass 1 con GDOP y Topología O(1)
+                if (culledCount === 0) {
+                    let gdop = this.calculateGDOP(sensors, pass1.p);
+                    let topology = this.classifyGeometry(sensors);
+                    let coupling = this.applyBilateralCoupling(sensors, distances, pass1.p);
+                    return { ...pass1, passes: 1, culled: 0, median_r, keptSensors: sensors.length, gdop, topology, coupledPairs: coupling.coupledPairs };
+                }
+
+                // PASS 2: Repetir NLS con el set podado (Pruned Set)
+                let prunedSensors = keepIndices.map(i => sensors[i]);
+                let prunedDistances = keepIndices.map(i => distances[i]);
+                
+                // 🚀 Aplicar el Acoplamiento Bilateral en los nodos limpios para estabilizar convergencia
+                let coupling = this.applyBilateralCoupling(prunedSensors, prunedDistances, pass1.p);
+                
+                // Usamos las distancias relajadas (coupledDistances) para la pasada definitiva
+                let pass2 = this.solvePass(prunedSensors, coupling.coupledDistances, pass1.p);
+                
+                let gdop = this.calculateGDOP(prunedSensors, pass2.p);
+                let topology = this.classifyGeometry(prunedSensors);
+
+                return { 
+                    p: pass2.p, 
+                    iter: pass1.iter + pass2.iter, 
+                    error: pass2.error, 
+                    passes: 2, 
+                    culled: culledCount, 
+                    median_r, 
+                    keptSensors: keepIndices.length,
+                    gdop: gdop,
+                    topology: topology,
+                    coupledPairs: coupling.coupledPairs
+                };
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 NEURAL BUS IMPLEMENTATION
+        // ═══════════════════════════════════════════════════════════
+        const defaultSignal = {
+            stats: null, spikePositions: [], firedCount: 0, gabaLevel: 1.0, coherence: 0, entropy: 0, bridgeActive: true,
+            fieldAmp: 1, tick: 0, rewardSignal: 0, burstRate: 0, webgpuActive: true,
+            modulators: { dopamine: 0.5, serotonin: 0.5, acetylcholine: 0.5, norepinephrine: 0.3 }, episodicCount: 0,
+            temperature: 72.0, b_thermal: 45.45, 
+            humidity: 50.0, rain: 0.0, b_moisture: 50.0,
+            b_kinetic: 10.0, b_pressure: 5.0, neat_index: 25 // 🚀 Nuevas variables NEAT
+        };
+
+        class NeuralBus {
+            constructor() {
+                this.signal = { ...defaultSignal };
+                this.listeners = new Set();
+                this.rewardListeners = new Set();
+                this.configListeners = new Set();
+                this.flyGenomeListeners = new Set();
+                this._rewardHistory = [];
+                this._engineConfig = { neurons: 302, useConnectome: true, organism: 'drosophila_melanogaster' };
+                this._bestFlyGenome = null;
+                this.MAX_HISTORY = 50;
+            }
+
+            emit(signal) { this.signal = signal; this.listeners.forEach(fn => fn(signal)); }
+            subscribe(fn) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
+
+            sendReward(event) {
+                this._rewardHistory.unshift(event);
+                if (this._rewardHistory.length > this.MAX_HISTORY) this._rewardHistory.pop();
+                this.rewardListeners.forEach(fn => fn(event));
+            }
+
+            onReward(fn) { this.rewardListeners.add(fn); return () => { this.rewardListeners.delete(fn); }; }
+            get rewardHistory() { return this._rewardHistory; }
+            get current() { return this.signal; }
+
+            setEngineConfig(config) { this._engineConfig = config; this.configListeners.forEach(fn => fn(config)); }
+            onConfigChange(fn) { this.configListeners.add(fn); fn(this._engineConfig); return () => { this.configListeners.delete(fn); }; }
+            get engineConfig() { return this._engineConfig; }
+
+            setBestFlyGenome(genome) { this._bestFlyGenome = genome; this.flyGenomeListeners.forEach(fn => fn(genome)); }
+            onFlyGenome(fn) { this.flyGenomeListeners.add(fn); if (this._bestFlyGenome) fn(this._bestFlyGenome); return () => { this.flyGenomeListeners.delete(fn); }; }
+            get bestFlyGenome() { return this._bestFlyGenome; }
+        }
+
+        const neuralBus = new NeuralBus();
+
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 THREE.JS MASTER RAIL VISUALIZATION
+        // ═══════════════════════════════════════════════════════════
+        const canvasContainer = document.getElementById('webgl-canvas');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x030508, 0.015);
+        
+        const camera = new THREE.PerspectiveCamera(60, canvasContainer.clientWidth / canvasContainer.clientHeight, 0.1, 1000);
+        camera.position.set(0, 10, 40);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        canvasContainer.appendChild(renderer.domElement);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        });
+
+        const railGroup = new THREE.Group();
+        scene.add(railGroup);
+
+        const axonMat = new THREE.LineBasicMaterial({ color: 0x0033aa, transparent: true, opacity: 0.3 });
+        for(let i=0; i<15; i++) {
+            const points = [];
+            let radius = Math.random() * 4 + 1;
+            let angle = Math.random() * Math.PI * 2;
+            let xOffset = Math.cos(angle) * radius;
+            let yOffset = Math.sin(angle) * radius;
+            
+            for(let z=-100; z<=100; z+=10) {
+                let waveX = xOffset + Math.sin(z * 0.05 + i) * 2;
+                let waveY = yOffset + Math.cos(z * 0.05 + i) * 2;
+                points.push(new THREE.Vector3(waveX, waveY, z));
+            }
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geo, axonMat);
+            railGroup.add(line);
+        }
+
+        const signals = [];
+        const geoSignal = new THREE.SphereGeometry(0.4, 8, 8);
+        const matSignalBlue = new THREE.MeshBasicMaterial({ color: 0x00ffff, blending: THREE.AdditiveBlending });
+        const matSignalReward = new THREE.MeshBasicMaterial({ color: 0xff00ff, blending: THREE.AdditiveBlending });
+        
+        const geoLM = new THREE.OctahedronGeometry(1.5, 0);
+        const matLM = new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, transparent: true, opacity: 0.8 });
+        const matLMFault = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.8 });
+
+        function spawnSignal(type, coordX = null, coordY = null, wasCulled = false) {
+            let mesh;
+            let radius = Math.random() * 4;
+            let angle = Math.random() * Math.PI * 2;
+            let x = coordX !== null ? coordX : Math.cos(angle) * radius;
+            let y = coordY !== null ? coordY : Math.sin(angle) * radius;
+
+            if (type === 'LM') {
+                mesh = new THREE.Mesh(geoLM, wasCulled ? matLMFault : matLM); // Rojo si tuvo que amputar
+                mesh.position.set(x, y, -80);
+            } else {
+                mesh = new THREE.Mesh(geoSignal, type === 'reward' ? matSignalReward : matSignalBlue);
+                mesh.position.set(x, y, -80);
+                mesh.scale.setScalar(type === 'reward' ? 2.5 : 1.0);
+            }
+            
+            railGroup.add(mesh);
+            signals.push({
+                mesh: mesh,
+                speed: type === 'reward' || type === 'LM' ? 2.5 : 1.0 + Math.random(),
+                wobble: Math.random() * Math.PI * 2,
+                baseX: x,
+                baseY: y,
+                isLM: type === 'LM'
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            railGroup.rotation.z += 0.002;
+
+            for (let i = signals.length - 1; i >= 0; i--) {
+                let s = signals[i];
+                s.mesh.position.z += s.speed;
+                
+                s.wobble += 0.1;
+                s.mesh.position.x = s.baseX + Math.sin(s.wobble) * 0.5;
+                s.mesh.position.y = s.baseY + Math.cos(s.wobble) * 0.5;
+
+                if (s.isLM) {
+                    s.mesh.rotation.x += 0.05;
+                    s.mesh.rotation.y += 0.05;
+                }
+
+                if (s.mesh.position.z > 50) {
+                    railGroup.remove(s.mesh);
+                    signals.splice(i, 1);
+                }
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 UI BINDINGS & MOCK NEURO ENGINE
+        // ═══════════════════════════════════════════════════════════
+
+        neuralBus.onConfigChange((cfg) => {
+            document.getElementById('cfg-org').innerText = cfg.organism;
+            document.getElementById('cfg-neu').innerText = cfg.neurons;
+            document.getElementById('cfg-con').innerText = cfg.useConnectome ? 'Active' : 'Bypassed';
+        });
+
+        neuralBus.onFlyGenome((genome) => {
+            document.getElementById('fly-genome').innerText = genome;
+        });
+
+        let lastTick = performance.now();
+        let tickCount = 0;
+
+        neuralBus.subscribe((sig) => {
+            tickCount++;
+            let now = performance.now();
+            if (now - lastTick > 1000) {
+                document.getElementById('tick-rate').innerText = `${tickCount} Hz`;
+                tickCount = 0;
+                lastTick = now;
+            }
+
+            document.getElementById('tel-spikes').innerText = sig.firedCount;
+            document.getElementById('tel-ent').innerText = sig.entropy.toFixed(3);
+            document.getElementById('tel-coh').innerText = sig.coherence.toFixed(3);
+            document.getElementById('tel-burst').innerText = `${sig.burstRate.toFixed(1)} Hz`;
+            document.getElementById('tel-gaba').innerText = sig.gabaLevel.toFixed(2);
+            document.getElementById('tel-amp').innerText = sig.fieldAmp.toFixed(2);
+            document.getElementById('epi-count').innerText = sig.episodicCount;
+            document.getElementById('reward-signal').innerText = sig.rewardSignal.toFixed(3);
+
+            const mods = sig.modulators;
+            document.getElementById('val-dop').innerText = mods.dopamine.toFixed(2);
+            document.getElementById('bar-dop').style.width = `${mods.dopamine * 100}%`;
+            document.getElementById('val-ser').innerText = mods.serotonin.toFixed(2);
+            document.getElementById('bar-ser').style.width = `${mods.serotonin * 100}%`;
+            document.getElementById('val-ace').innerText = mods.acetylcholine.toFixed(2);
+            document.getElementById('bar-ace').style.width = `${mods.acetylcholine * 100}%`;
+            document.getElementById('val-nor').innerText = mods.norepinephrine.toFixed(2);
+            document.getElementById('bar-nor').style.width = `${mods.norepinephrine * 100}%`;
+
+            // 🚀 Actualización UI Térmica, Hídrica y NEAT
+            document.getElementById('env-bthermal').innerText = `${sig.b_thermal.toFixed(2)}%`;
+            document.getElementById('env-bmoisture').innerText = `${sig.b_moisture.toFixed(2)}%`;
+            document.getElementById('env-bkinetic').innerText = `${sig.b_kinetic.toFixed(2)}%`;
+            document.getElementById('env-bpressure').innerText = `${sig.b_pressure.toFixed(2)}%`;
+            
+            let neatEl = document.getElementById('env-neat');
+            neatEl.innerText = `${sig.neat_index}%`;
+
+            // Control visual por umbrales NEAT (Six Sigma Control Chart logic)
+            if (sig.neat_index >= 75) {
+                neatEl.className = 'stat-value text-red-500 heartbeat';
+                neatEl.style.textShadow = '0 0 15px #ff0000';
+            } else if (sig.neat_index >= 50) {
+                neatEl.className = 'stat-value text-orange-400';
+                neatEl.style.textShadow = '0 0 10px #ffaa00';
+            } else {
+                neatEl.className = 'stat-value text-green-400';
+                neatEl.style.textShadow = '0 0 10px #00ff00';
+            }
+
+            if (Math.random() < sig.burstRate / 100) {
+                spawnSignal('normal');
+            }
+        });
+
+        // 🚀 INTEGRACIÓN DEL MOTOR LEVENBERG-MARQUARDT CON RECOMPENSAS
+        const rewardContainer = document.getElementById('reward-log-container');
+        
+        // 6 Nodos sensores fijos para robustez O(N log N)
+        const LMNodes = [
+            { x: -5, y:  5 }, { x:  5, y:  5 }, { x:  0, y: -6 },
+            { x: -6, y: -4 }, { x:  6, y: -4 }, { x:  0, y:  0 }
+        ];
+
+        neuralBus.onReward((ev) => {
+            const isPos = ev.value > 0;
+            const valStr = (isPos ? '+' : '') + ev.value.toFixed(2);
+            const colorClass = isPos ? 'reward-positive' : 'reward-negative';
+            
+            // 1. Simular el origen real topológico
+            const realOriginX = (Math.random() - 0.5) * 8;
+            const realOriginY = (Math.random() - 0.5) * 8;
+
+            // Seleccionar aleatoriamente 1 sensor para sufrir un error grave (Multipath/Fallido)
+            const faultySensorIndex = Math.floor(Math.random() * LMNodes.length);
+
+            // 2. Sensores calculan distancias (R_i)
+            const distances = LMNodes.map((sensor, idx) => {
+                const dx = realOriginX - sensor.x;
+                const dy = realOriginY - sensor.y;
+                let noise = (Math.random() - 0.5) * 0.1; // Ruido estándar
+                
+                // Inyectar un error destructivo de ~15m en el sensor defectuoso
+                if (idx === faultySensorIndex) {
+                    noise += (Math.random() > 0.5 ? 15.0 : -15.0); 
+                }
+                return Math.sqrt(dx*dx + dy*dy) + noise;
+            });
+
+            // 3. Ejecutar algoritmo Robust 2-Pass Levenberg-Marquardt
+            const lmResult = LMEngine.solveRobust(LMNodes, distances);
+
+            // 5. Actualizar UI con la métrica RANSAC/MAD y GDOP
+            document.getElementById('lm-sensors').innerText = `${lmResult.keptSensors} / ${LMNodes.length}`;
+            document.getElementById('lm-mad').innerText = lmResult.median_r.toFixed(2) + 'm';
+            document.getElementById('lm-culled').innerText = lmResult.culled;
+            
+            document.getElementById('lm-coord').innerText = `[${lmResult.p.x.toFixed(2)}, ${lmResult.p.y.toFixed(2)}]`;
+            document.getElementById('lm-iters').innerText = `${lmResult.passes} Pass / ${lmResult.iter} Iters`;
+            document.getElementById('lm-norm').innerText = lmResult.error.toFixed(4) + 'm';
+
+            // Evaluación de la Calidad Geométrica (GDOP)
+            let gdopEl = document.getElementById('lm-gdop');
+            let gdopVal = lmResult.gdop;
+            
+            if (gdopVal >= 99.0) {
+                gdopEl.innerText = '99.0 (POOR)';
+                gdopEl.className = 'stat-value text-red-600';
+            } else {
+                gdopEl.innerText = gdopVal.toFixed(2);
+                if (gdopVal < 2) gdopEl.className = 'stat-value text-green-400'; // Excelente
+                else if (gdopVal <= 5) gdopEl.className = 'stat-value text-yellow-400'; // Bueno
+                else gdopEl.className = 'stat-value text-red-500'; // Pobre
+            }
+
+            // Evaluación O(1) de Topología Geométrica (Arte a costo cero)
+            let topoEl = document.getElementById('lm-topo');
+            let topo = lmResult.topology;
+            topoEl.innerText = `${topo.shape} [Q:${topo.quality.toFixed(1)}]`;
+            
+            if (topo.quality === 1.0) topoEl.className = 'stat-value text-green-400';
+            else if (topo.quality === 0.6) topoEl.className = 'stat-value text-yellow-400';
+            else topoEl.className = 'stat-value text-red-500';
+
+            // Evaluación de Acoplamiento Bilateral
+            let coupleEl = document.getElementById('lm-couple');
+            if (lmResult.coupledPairs > 0) {
+                coupleEl.innerText = `${lmResult.coupledPairs} pares (κ=0.3)`;
+                coupleEl.className = 'stat-value text-cyan-400';
+            } else {
+                coupleEl.innerText = `Sin Acoplamiento`;
+                coupleEl.className = 'stat-value text-gray-500';
+            }
+
+            // 7. Cuantización Maya Base-20 (Compresión de Coordenadas)
+            // Asumimos un grid operativo de -10 a 10 metros (Δ = 20)
+            const qX = LMEngine.quantizeBase20(lmResult.p.x, -10, 10);
+            const qY = LMEngine.quantizeBase20(lmResult.p.y, -10, 10);
+            
+            // UI: Mostrando niveles discretos (0-19)
+            document.getElementById('maya-level').innerText = `[${qX.level}, ${qY.level}]`;
+            document.getElementById('maya-dequant').innerText = `[${qX.dequant.toFixed(2)}, ${qY.dequant.toFixed(2)}]`;
+            
+            // Error acotado matemáticamente a Δ/40 (Mitad de la ventana del nivel)
+            document.getElementById('maya-error').innerText = `±${Math.max(qX.error, qY.error).toFixed(2)}m`;
+
+            // Resaltar UI de éxito
+            document.getElementById('lm-coord').style.textShadow = '0 0 10px #ff00ff';
+            setTimeout(() => document.getElementById('lm-coord').style.textShadow = 'none', 300);
+
+            // 6. Instanciar en el renderizador 3D (Rojo si detectó y amputó un error)
+            spawnSignal('reward'); 
+            spawnSignal('LM', lmResult.p.x, lmResult.p.y, lmResult.culled > 0); 
+        });
+
+        // ═══════════════════════════════════════════════════════════
+        // 🚀 MOCK ENGINE SIMULATION
+        // ═══════════════════════════════════════════════════════════
+
+        neuralBus.setEngineConfig({ neurons: 133000, useConnectome: true, organism: 'Drosophila (Brain)' });
+        
+        let mockState = { ...defaultSignal };
+        mockState.episodicCount = 142;
+
+        setInterval(() => {
+            mockState.tick++;
+            mockState.firedCount += Math.floor(Math.random() * 5);
+            mockState.entropy = 0.5 + Math.sin(mockState.tick * 0.01) * 0.3 + Math.random() * 0.1;
+            mockState.coherence = 0.8 - Math.abs(Math.sin(mockState.tick * 0.02)) * 0.4;
+            mockState.burstRate = Math.max(0, 15 + Math.sin(mockState.tick * 0.05) * 10 + Math.random() * 5);
+            mockState.gabaLevel = 0.8 + Math.cos(mockState.tick * 0.005) * 0.2;
+            
+            mockState.modulators.dopamine = Math.max(0, Math.min(1, mockState.modulators.dopamine + (Math.random()-0.5)*0.05));
+            mockState.modulators.serotonin = Math.max(0, Math.min(1, mockState.modulators.serotonin + (Math.random()-0.5)*0.02));
+            mockState.modulators.acetylcholine = Math.max(0, Math.min(1, mockState.modulators.acetylcholine + (Math.random()-0.5)*0.08));
+            mockState.modulators.norepinephrine = Math.max(0, Math.min(1, mockState.modulators.norepinephrine + (Math.random()-0.5)*0.04));
+
+            // 🚀 Dinámicas Ambientales (Sub-índices)
+            let temp = 80 + Math.sin(mockState.tick * 0.002) * 30 + (Math.random() - 0.5) * 5; 
+            let b_thermal = Math.max(0, Math.min(100, ((temp - 32) / (120 - 32)) * 100));
+            
+            let humidity = 60 + Math.sin(mockState.tick * 0.0015) * 30 + (Math.random() - 0.5) * 5; 
+            humidity = Math.max(0, Math.min(100, humidity));
+            let rain = Math.max(0, Math.sin(mockState.tick * 0.001) * 2 - 1.5 + Math.random() * 0.5); 
+            let b_moisture = Math.max(0, Math.min(100, humidity * (1 + rain * 0.05)));
+
+            // Simulación Cinética (Viento/Ráfagas) y Presión Barométrica (Caída = Tormenta)
+            let wind = 20 + Math.sin(mockState.tick * 0.003) * 70 + Math.random() * 15;
+            let b_kinetic = Math.max(0, Math.min(100, (wind / 120.0) * 100));
+
+            let press = 1013 - Math.abs(Math.sin(mockState.tick * 0.001) * 40) - Math.random() * 5;
+            let b_pressure = Math.max(0, Math.min(100, ((1013 - press) / 30.0) * 100));
+
+            // 🚀 EL TOQUE MAESTRO: NEAT FUSION
+            // neat = clip(round(w.thermal·b_thermal + w.moisture·b_moisture + w.kinetic·b_kinetic + w.pressure·b_pressure), 0, 100)
+            const w = { thermal: 0.30, moisture: 0.30, kinetic: 0.20, pressure: 0.20 };
+            let neat_raw = (w.thermal * b_thermal) + (w.moisture * b_moisture) + (w.kinetic * b_kinetic) + (w.pressure * b_pressure);
+            let neat = Math.max(0, Math.min(100, Math.round(neat_raw)));
+
+            mockState.temperature = temp;
+            mockState.b_thermal = b_thermal;
+            mockState.humidity = humidity;
+            mockState.rain = rain;
+            mockState.b_moisture = b_moisture;
+            mockState.b_kinetic = b_kinetic;
+            mockState.b_pressure = b_pressure;
+            mockState.neat_index = neat;
+
+            // Interacción sistémica: NEAT Global dicta el destino del Hardware/Cerebelo
+            if (neat >= 75) {
+                // Crisis Ambiental Severa
+                mockState.entropy += 0.35;
+                mockState.coherence -= 0.25; 
+            } else if (neat >= 50) {
+                // Estrés Moderado
+                mockState.entropy += 0.1;
+            }
+
+            mockState.rewardSignal *= 0.95;
+            neuralBus.emit(mockState);
+        }, 16);
+
+        setInterval(() => {
+            const isWin = Math.random() > 0.3;
+            const val = isWin ? Math.random() * 0.8 + 0.2 : -(Math.random() * 0.5 + 0.1);
+            
+            const event = {
+                source: Math.random() > 0.5 ? 'predictor' : 'betting_agent',
+                value: val,
+                reason: isWin ? 'Pattern Match Confirmed' : 'Prediction Error (LTD)',
+                confidence: 0.6 + Math.random() * 0.4,
+                timestamp: Date.now()
+            };
+
+            mockState.modulators.dopamine = isWin ? 1.0 : 0.1;
+            mockState.modulators.norepinephrine = 0.9;
+            mockState.rewardSignal = val;
+            
+            if(isWin && Math.random() > 0.8) {
+                mockState.episodicCount++;
+                neuralBus.setBestFlyGenome(`GEN-${Math.random().toString(36).substring(2, 8).toUpperCase()}`);
+            }
+
+            neuralBus.sendReward(event);
+        }, 3000); 
+
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+```
