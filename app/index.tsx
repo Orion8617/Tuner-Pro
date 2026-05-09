@@ -43,6 +43,7 @@ import {
   FrequencyStabilizer,
   getInstrumentFreqRange,
   scaleStringsToReference,
+  computeNEATAudio,
 } from "@/lib/tuner-engine";
 
 const ACCENT = "#4AEDC4";
@@ -271,6 +272,7 @@ export default function TunerScreen() {
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [tunedStrings, setTunedStrings] = useState<Set<number>>(new Set());
   const [confidence, setConfidence] = useState(0);
+  const [neatAudio, setNeatAudio] = useState(-1);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -448,6 +450,7 @@ export default function TunerScreen() {
       const rawFrequency = autoCorrelate(buffer, audioContext!.sampleRate, range.min, range.max);
       const stableFrequency = stabilizerRef.current.push(rawFrequency);
       setConfidence(stabilizerRef.current.getConfidence());
+      setNeatAudio(computeNEATAudio(buffer, rawFrequency, stableFrequency));
       if (stableFrequency !== null && stableFrequency >= range.min && stableFrequency <= range.max) {
         if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
         const noteInfo = frequencyToNote(stableFrequency, referenceA4Ref.current);
@@ -467,7 +470,7 @@ export default function TunerScreen() {
       } else if (rawFrequency <= 0 && !silenceTimeoutRef.current) {
         silenceTimeoutRef.current = setTimeout(() => {
           setDetectedFrequency(0); setDetectedNote(null); setDetectedOctave(null);
-          setDetectedString(null); setCents(0); setConfidence(0); silenceTimeoutRef.current = null;
+          setDetectedString(null); setCents(0); setConfidence(0); setNeatAudio(-1); silenceTimeoutRef.current = null;
         }, 800);
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -624,26 +627,46 @@ export default function TunerScreen() {
             />
           </View>
 
-          {/* ===== CONFIDENCE BAR ===== */}
+          {/* ===== CONFIDENCE BAR (GDOP-inspired) + NEAT-Audio ===== */}
           {isListening && (
-            <View style={styles.confidenceWrap}>
-              <View style={styles.confidenceTrack}>
-                <View
-                  style={[
-                    styles.confidenceFill,
-                    {
-                      width: `${Math.round(confidence * 100)}%` as any,
-                      backgroundColor: isInTune ? ACCENT
-                        : confidence > 0.6 ? ACCENT_BRIGHT
-                        : confidence > 0.3 ? ORANGE
-                        : "rgba(255,255,255,0.15)",
-                    },
-                  ]}
-                />
+            <View style={styles.signalBlock}>
+              <View style={styles.confidenceWrap}>
+                <Text style={styles.gdopLabel}>GDOP</Text>
+                <View style={styles.confidenceTrack}>
+                  <View
+                    style={[
+                      styles.confidenceFill,
+                      {
+                        width: `${Math.round(confidence * 100)}%` as any,
+                        backgroundColor: isInTune ? ACCENT
+                          : confidence > 0.6 ? ACCENT_BRIGHT
+                          : confidence > 0.3 ? ORANGE
+                          : "rgba(255,255,255,0.15)",
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.confidenceLabel}>
+                  {Math.round(confidence * 100)}%
+                </Text>
               </View>
-              <Text style={styles.confidenceLabel}>
-                {Math.round(confidence * 100)}%
-              </Text>
+
+              {Platform.OS === "web" && neatAudio >= 0 && (
+                <View style={styles.neatRow}>
+                  <Text style={styles.neatTag}>ENV</Text>
+                  <View style={[
+                    styles.neatDot,
+                    { backgroundColor: neatAudio < 30 ? ACCENT : neatAudio < 60 ? ORANGE : RED }
+                  ]} />
+                  <Text style={[
+                    styles.neatStatus,
+                    { color: neatAudio < 30 ? ACCENT : neatAudio < 60 ? ORANGE : RED }
+                  ]}>
+                    {neatAudio < 30 ? "IDEAL" : neatAudio < 60 ? "NOISY" : "TOO LOUD"}
+                  </Text>
+                  <Text style={styles.neatValue}>{neatAudio}</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -717,6 +740,11 @@ export default function TunerScreen() {
                   />
                 );
               })}
+          </View>
+
+          {/* ===== KLONENGINE ATTRIBUTION ===== */}
+          <View style={styles.attributionRow}>
+            <Text style={styles.attributionText}>KlonEngine · SNN · GDOP · NEAT-Audio</Text>
           </View>
 
           {/* ===== STRINGS VISUAL ===== */}
@@ -933,12 +961,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 68, 68, 0.12)",
     borderColor: "rgba(255, 68, 68, 0.28)",
   },
+  signalBlock: {
+    marginTop: 8,
+    gap: 4,
+  },
   confidenceWrap: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 24,
-    marginTop: 8,
     gap: 8,
+  },
+  gdopLabel: {
+    fontSize: 8,
+    fontWeight: "700" as const,
+    color: "rgba(74, 237, 196, 0.35)",
+    letterSpacing: 0.8,
+    width: 30,
   },
   confidenceTrack: {
     flex: 1,
@@ -959,5 +997,49 @@ const styles = StyleSheet.create({
     width: 26,
     textAlign: "right" as const,
     fontVariant: ["tabular-nums"] as any,
+  },
+  neatRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    gap: 6,
+  },
+  neatTag: {
+    fontSize: 8,
+    fontWeight: "700" as const,
+    color: "rgba(74, 237, 196, 0.35)",
+    letterSpacing: 0.8,
+    width: 30,
+  },
+  neatDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  neatStatus: {
+    fontSize: 8,
+    fontWeight: "700" as const,
+    letterSpacing: 1.0,
+    flex: 1,
+  },
+  neatValue: {
+    fontSize: 8,
+    fontWeight: "500" as const,
+    color: TEXT_DIM,
+    fontVariant: ["tabular-nums"] as any,
+    width: 26,
+    textAlign: "right" as const,
+  },
+  attributionRow: {
+    alignItems: "center",
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  attributionText: {
+    fontSize: 7,
+    fontWeight: "500" as const,
+    color: "rgba(74, 237, 196, 0.14)",
+    letterSpacing: 1.2,
+    textTransform: "uppercase" as const,
   },
 });

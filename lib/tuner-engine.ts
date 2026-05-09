@@ -586,6 +586,8 @@ export class FrequencyStabilizer {
       : this.sortBuf[mid];
   }
 
+  getRangeCents(): number { return this.lastRangeCents; }
+
   // GDOP-inspired confidence: 0.0 (no signal) → 1.0 (perfect lock)
   getConfidence(): number {
     if (this.count < this.minReadings) return 0;
@@ -602,4 +604,66 @@ export class FrequencyStabilizer {
     this.silenceCount   = 0;
     this.lastRangeCents = Infinity;
   }
+}
+
+// ─── NEAT-Audio Environmental Quality Index ───────────────────────────────────
+// Adapted from Juan José Salgado's NEAT Environmental Index (KlonEngine).
+// Original NEAT fusion: 0.40×thermal + 0.30×moisture + 0.20×kinetic + 0.20×pressure
+// Audio adaptation:     0.40×noise   + 0.30×reverb   + 0.30×distortion
+//
+// Output: 0-100
+//   0-29  → Green  — ideal tuning environment
+//  30-59  → Yellow — moderate interference
+//  60-100 → Red    — too noisy / too loud
+// ─────────────────────────────────────────────────────────────────────────────
+export function computeNEATAudio(
+  buffer: Float32Array,
+  rawFrequency: number,
+  stabilizedFrequency: number | null
+): number {
+  const size = buffer.length;
+
+  let sumSq = 0;
+  for (let i = 0; i < size; i++) sumSq += buffer[i] * buffer[i];
+  const rms = Math.sqrt(sumSq / size);
+
+  const RMS_FLOOR = 0.008;
+  const RMS_LOUD  = 0.18;
+
+  // b_ruido: ambient noise (high RMS with no valid pitch = noisy room)
+  let b_ruido: number;
+  if (rawFrequency > 0) {
+    b_ruido = 0;
+  } else if (rms < RMS_FLOOR) {
+    b_ruido = 0;
+  } else {
+    b_ruido = Math.min((rms - RMS_FLOOR) / (RMS_LOUD - RMS_FLOOR) * 100, 100);
+  }
+
+  // b_reverb: signal instability proxy (detected but not yet stable → reverb/interference)
+  let b_reverb: number;
+  if (stabilizedFrequency !== null) {
+    b_reverb = 0;
+  } else if (rawFrequency > 0) {
+    b_reverb = 40;
+  } else if (rms > 0.025) {
+    b_reverb = 50;
+  } else {
+    b_reverb = 10;
+  }
+
+  // b_distorsion: distortion proxy (overload or very weak SNR)
+  let b_distorsion: number;
+  if (rms > 0.35) {
+    b_distorsion = 85;
+  } else if (rawFrequency > 0 && stabilizedFrequency !== null) {
+    b_distorsion = 0;
+  } else if (rawFrequency > 0) {
+    b_distorsion = 20;
+  } else {
+    b_distorsion = rms > 0.012 ? 38 : 5;
+  }
+
+  const neat_raw = 0.40 * b_ruido + 0.30 * b_reverb + 0.30 * b_distorsion;
+  return Math.min(100, Math.max(0, Math.round(neat_raw)));
 }
