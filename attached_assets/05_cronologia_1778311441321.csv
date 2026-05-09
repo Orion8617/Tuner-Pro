@@ -1,0 +1,24 @@
+"ID",Fecha,Titulo,Proyecto,Significancia,Descripcion
+1,2024-01-01,Inicio de ClonEngine,ClonEngine,major,Comienzo del desarrollo del motor SNN neuromorfico basado en conectomas biologicos reales.
+2,2024-06-01,Integracion del conectoma C. elegans,ClonEngine,breakthrough,Primera implementacion funcional de las 302 neuronas del gusano C. elegans con clasificacion Varshney 2011.
+3,2024-08-01,Derivacion del Cuantizador Vigesimal Maya,ClonEngine,breakthrough,"Descubrimiento independiente de VIGESIMAL_WEIGHT = 1/9.5 como cuantizador Lloyd-Max optimo, derivado del sistema numerico maya."
+4,2024-10-01,Pascal Culler 3D implementado,ClonEngine,major,Sistema de culling basado en Triangulo de Pascal Fila 4 para prioridad espacial neuronal.
+5,2024-12-01,Conexion con FlyWire Drosophila,ClonEngine,breakthrough,"Integracion del dataset FlyWire 2024 con 139,255 neuronas en 343 columnas hexagonales."
+6,2025-01-15,Correccion STBP: Gradiente centrado en vth,ClonEngine,breakthrough,"Identificacion y correccion del error critico en STBP: gradiente surrogate debe centrarse en el umbral real vth, no en u=0."
+7,2025-03-01,Benchmark AI4I 2020: 98.4% F1-Macro,ClonEngine,breakthrough,ClonEngine logra 98.4% F1-Macro en benchmark industrial con solo 18.6KB de modelo en CPU puro.
+8,2025-06-01,Inicio SovereignTunnel,SovereignTunnel,major,Comienzo del desarrollo de infraestructura VPN post-cuantica con estandares NIST FIPS 203/204.
+9,2025-09-01,Six Sigma aplicado a criptografia,SovereignTunnel,major,Implementacion de calidad Six Sigma 6sigma (99.99966% yield) en operaciones de API criptografica.
+10,2025-11-01,KlonOS LagKiller Ring-0,KlonOS,breakthrough,Implementacion del interceptor TUN Android con handoff de file descriptor a core Rust via JNI.
+14,2025-Q3,Primer deploy de LocalizaHN con triangulación TriNet-Pythag v1,LocalizaHN,major,"Primera versión del sistema de localización celular para Honduras. Motor Python puro, sin Rust/WASM."
+15,2025-Q4,LocalizaHN v2: Motor Rust/WASM + cuantización vigesimal Maya,LocalizaHN,critical,Reescritura del motor de triangulación en Rust compilado a WebAssembly. Integración de cuantización vigesimal Maya. SNNState incorporado — ClonEngine corre dentro de LocalizaHN.
+16,2026-03,Plan de publicación académica ClonEngine finalizado,ClonEngine,major,Estrategia de 4 papers definida. Fase 0 identificada: Zenodo DOI antes de enviar a revistas. Paper 3 (mayas) identificado como el de mayor impacto global.
+23,2026-04,SpikeForge vGPU identificado como producto SDK independiente,ClonEngine,major,"Definición de la Línea 4 de ingreso: SDK licensing con precios de $299 a $19,999/año según tier."
+13,2026-04,Descubrimiento: Ternas Pitagóricas en el Triángulo de Pascal,Matemáticas Unificadas,major,"Juan documenta formalmente la conexión entre los ternas pitagóricos (a²+b²=c²) y los coeficientes binomiales del Triángulo de Pascal, unificando geometría euclidiana con matemática combinatoria."
+17,2026-04,LocalizaHN documentado en El Libro de Juan,LocalizaHN,minor,"Código fuente de LocalizaHN incorporado como capítulo del libro. Conexiones cruzadas con ClonEngine, Pascal, y matemáticas mayas documentadas formalmente."
+18,2026-04,Estrategia comercial del ClonEngine documentada,ClonEngine,major,"Plan de 90 días, 3 líneas de ingreso, tabla de precios de mercado definida."
+11,2026-04-16,Whitepaper ClonEngine v1.0 publicado,ClonEngine,breakthrough,Whitepaper tecnico formal documentando las 7 innovaciones matematicas y resultados de benchmark.
+12,2026-04-18,El Libro de Juan: Inicio de documentacion,El Libro de Juan,major,Creacion del sistema de documentacion personal y profesional: el libro que captura quien soy y lo que he construido.
+19,2026-05,GitHub release v3.0 + Zenodo DOI,ClonEngine,major,Meta: establecer prioridad legal de las 6 innovaciones del Layer 1.
+20,2026-05,npm publish @klonengine/layer1,ClonEngine,major,Primer paquete público del ClonEngine disponible para desarrolladores globales.
+21,2026-06,Primer cliente SaaS (piloto universitario),ClonEngine,major,Meta: 1 institución académica LATAM con acuerdo piloto gratuito.
+22,2026-07,Primer contacto con Intel/ARM para licencia IP,ClonEngine,major,Meta: 1 reunión con cualquier empresa de chips neuromorfica.

@@ -1,0 +1,15 @@
+El Libro de Juan — Exportación CSV
+Autor: Juan José Salgado Fuentes
+Fecha: 2026-04-20
+Ubicación: La Lima, Cortés, Honduras
+
+Archivos:
+  01_perfil.csv              — Identidad personal y profesional
+  02_capitulos.csv           — Capítulos del libro de investigación
+  03_conceptos_innovaciones.csv — Las 37 innovaciones documentadas
+  04_notas_investigacion.csv — Notas y observaciones de campo
+  05_cronologia.csv          — Hitos y fechas clave
+  06_referencias_cruzadas.csv — Conexiones entre disciplinas
+
+Proyectos: ClonEngine, SovereignTunnel, KlonOS, LocalizaHN
+Contacto: klonengine@proton.me

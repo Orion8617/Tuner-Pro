@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRIDENT TERRA v3.0 - LocalizaHN</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; font-family: system-ui, sans-serif; background: #010204; color: #58a6ff; display: flex; height: 100vh; overflow: hidden; }
+        #sidebar { width: 320px; background: #0d1117; border-right: 1px solid #30363d; padding: 20px; display: flex; flex-direction: column; z-index: 1000; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+        #map { flex: 1; height: 100vh; background: #000; }
+        h1 { font-size: 18px; margin-top: 0; color: #c9d1d9; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
+        .btn { background: #238636; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 15px; width: 100%; transition: background 0.2s; }
+        .btn:hover { background: #2ea043; }
+        .panel-box { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 15px; margin-top: 15px; }
+        .metric { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+        .metric-val { font-weight: bold; color: #00ffcc; }
+        #console-log { font-family: monospace; font-size: 11px; color: #8b949e; background: #010409; padding: 10px; border-radius: 6px; margin-top: 15px; flex: 1; overflow-y: auto; border: 1px solid #30363d; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>TRIDENT TERRA v3.0</h1>
+        
+        <div class="panel-box">
+            <div class="metric"><span>Estado SNN:</span> <span id="snn-status" class="metric-val">INACTIVO</span></div>
+            <div class="metric"><span>GPU Compute:</span> <span id="gpu-status" class="metric-val">INACTIVO</span></div>
+            <div class="metric"><span>Target:</span> <span class="metric-val" style="color:#d29922">Honduras (HN)</span></div>
+        </div>
+
+        <button class="btn" onclick="iniciarSistema()">INICIAR SISTEMA DE RASTREO</button>
+
+        <div id="console-log">
+            <div>> Sistema en espera...</div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        // --- 1. CONFIGURACIÓN DEL MAPA ---
+        let map;
+        function initMap() {
+            // Centrado en Honduras
+            map = L.map('map').setView([14.5, -87.0], 7);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CartoDB'
+            }).addTo(map);
+        }
+        initMap();
+
+        function log(msg) {
+            const consoleEl = document.getElementById('console-log');
+            consoleEl.innerHTML += `<div>> ${msg}</div>`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        // --- 2. EL HILO SECUNDARIO (Web Worker inyectado) ---
+        // Convertimos tu código snn-core.js en un Blob para que corra desde un solo archivo HTML
+        const workerCode = `
+            let controlBus, brainVoltages;
+            self.onmessage = (event) => {
+                if (event.data.type === "BOOT") {
+                    const sab = event.data.memory;
+                    controlBus = new Int32Array(sab, 0, 16);
+                    brainVoltages = new Float32Array(sab, 64, 139255);
+                    postMessage("[CPU CORE] Memoria montada. Iniciando modelo Izhikevich...");
+                    physicsLoop();
+                }
+            };
+            function physicsLoop() {
+                const currentTick = Atomics.load(controlBus, 0);
+                Atomics.wait(controlBus, 0, currentTick);
+                for(let i = 0; i < 1000; i++) { // Reducido para evitar trabar PCs sin headers adecuados
+                    let v = brainVoltages[i];
+                    v += 0.04 * v * v + 5.0 * v + 140.0;
+                    if (v > 30.0) { v = -65.0; }
+                    brainVoltages[i] = v;
+                }
+                Atomics.store(controlBus, 1, 1);
+                postMessage("[CPU CORE] Ciclo neuronal completado.");
+                physicsLoop();
+            }
+        `;
+
+        async function iniciarSistema() {
+            log("Inicializando secuencias de arranque...");
+            
+            // Simulación de ubicación de camión en San Pedro Sula
+            setTimeout(() => {
+                const lat = 15.5000 + (Math.random() - 0.5) * 0.05;
+                const lng = -88.0333 + (Math.random() - 0.5) * 0.05;
+                
+                L.circleMarker([lat, lng], {
+                    radius: 8, color: '#00ffcc', fillColor: '#00ffcc', fillOpacity: 0.5
+                }).addTo(map).bindPopup('<b>OBJETIVO LOCALIZADO</b><br>Triangulación Activa').openPopup();
+                
+                map.setView([lat, lng], 13, { animate: true });
+                log(`Torres interceptadas en San Pedro Sula. Coordenadas: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+            }, 1500);
+
+            // --- 3. INICIO DE LA MEMORIA COMPARTIDA ---
+            try {
+                // Nota Técnica: Para que SharedArrayBuffer funcione en producción real en la web, 
+                // tu servidor necesita headers de seguridad (COOP/COEP).
+                const sab = new SharedArrayBuffer(1024 * 1024); // 1MB
+                const blob = new Blob([workerCode], { type: 'application/javascript' });
+                const worker = new Worker(URL.createObjectURL(blob));
+                
+                worker.onmessage = (e) => { 
+                    log(e.data); 
+                    document.getElementById('snn-status').textContent = "ACTIVO";
+                };
+                worker.postMessage({ type: "BOOT", memory: sab });
+                
+                // Despertar al worker
+                const controlBus = new Int32Array(sab, 0, 16);
+                setTimeout(() => {
+                    Atomics.store(controlBus, 0, 1);
+                    Atomics.notify(controlBus, 0, 1);
+                }, 2000);
+
+            } catch (error) {
+                log("<span style='color:red'>Advertencia: SharedArrayBuffer bloqueado por seguridad del navegador (requiere HTTPS/Headers). Usando fallback.</span>");
+                document.getElementById('snn-status').textContent = "FALLBACK JS";
+            }
+
+            // --- 4. INICIO DE WEBGPU ---
+            if (!navigator.gpu) {
+                log("<span style='color:red'>WebGPU no soportado en este navegador.</span>");
+                return;
+            }
+            try {
+                const adapter = await navigator.gpu.requestAdapter();
+                const device = await adapter.requestDevice();
+                document.getElementById('gpu-status').textContent = "ACTIVO";
+                log("[GPU] Núcleos WebGPU listos para cálculo masivo.");
+            } catch (e) {
+                log("<span style='color:red'>Error iniciando WebGPU.</span>");
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+"ID",Titulo,Slug,Categoria,Descripcion,Orden,Creado
+1,Arquitectura Neuromorfica,arquitectura-neuromorfca,neuroscience,ClonEngine: el motor SNN con conectomas biológicos duales,1,2026-04-18
+2,Las 7 Innovaciones Mundiales,siete-innovaciones,neuroscience,Las 7 innovaciones sin precedente en la literatura científica,2,2026-04-18
+3,SovereignTunnel: Criptografía Post-Cuántica,sovereign-tunnel,cryptography,Infraestructura VPN cuántico-resistente con estándares NIST FIPS 203/204,3,2026-04-18
+4,KlonOS: Sistema Ring-0,klonosac-ring-0,systems,Interceptor de red Android a nivel de sistema operativo,4,2026-04-18
+5,Matemáticas Mayas en IA,matematicas-mayas,mathematics,El sistema vigesimal maya como base para cuantización óptima,5,2026-04-18
+6,Triángulo de Pascal en Computación,triangulo-pascal,mathematics,Pascal como sistema de prioridad espacial y culling neuronal,6,2026-04-18
+7,Mi Perfil: Quién Soy,mi-perfil,profile,Identidad personal y profesional — el inventor detrás del código,7,2026-04-18
+8,LocalizaHN — Sistema de Localización Celular,localizahn,systems,Motor SaaS de geolocalización de teléfonos móviles para Honduras. Triangulación de torres celulares BTS con solver propietario TriNet-Pythag v2. El mismo ClonEngine corre dentro de él.,8,2026-04-18
+9,Plan de Publicación — 4 Papers Académicos,plan-publicacion,profile,"Estrategia de publicación científica para ClonEngine. 4 papers en Frontiers Neuroscience, IEEE TNNLS, Nature Scientific Reports, y Scientific American. Fase 0: Zenodo DOI.",9,2026-04-18
+10,Trabajo Futuro (VQE Cuántico) y Apéndices,cap10-vqe-cuantico-apendices,quantum,"Extensión cuántica del ClonEngine SNN via Variational Quantum Eigensolver (VQE). Apéndices formales del paper: A.1 Lloyd-Max=Maya, A.2 Pitágoras-Pascal, A.3 RDTSC Lock-Free, A.4 Six Sigma. El Apéndice A.1 es el 'mic-drop' matemático del paper.",10,2026-04-18
+11,Modelo Comercial — Cómo Vender el ClonEngine,cap11-modelo-comercial,business,"Estrategia de comercialización del ClonEngine SpikeForge Layer 1. Tres líneas de ingresos: API SaaS, licencias de IP, y consultoría. Mercados objetivo, precios, y hoja de ruta de ventas.",11,2026-04-18
