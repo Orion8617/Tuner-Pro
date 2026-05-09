@@ -2053,6 +2053,260 @@ Costo: $0. El DOI establece prioridad legal de la invención.
 
 ---
 
+## KLONOS NEURAL BUS MONITOR — Análisis de Arquitectura (VERIFICADO EN CÓDIGO)
+
+**Archivo:** `KlonOS Neural Bus Monitor | Private Cloud 5.0` — HTML monolítico que ejecuta el stack completo de ClonEngine en el navegador, incluyendo LMEngine, NEAT, NeuralBus, neuromoduladores, y Three.js Master Rail.
+
+**Importancia:** Este archivo es la **prueba viva de que todos los inventos funcionan juntos**. No es teoría — es código ejecutable.
+
+---
+
+### TRIDENT-LM Engine — Código Completo Verificado
+
+**Parámetros exactos del solver (de código fuente):**
+```javascript
+// LM Solver
+lambda_inicial = 0.1
+max_iteraciones = 50
+tolerancia_convergencia = 0.01  // metros
+decay_lambda = max(λ/2, 1e-6)   // por iteración exitosa
+
+// Bilateral Coupling
+kappa = 0.3                      // constante de acoplamiento
+umbral_angular = 2.5             // radianes = 143.2° (APs en lados opuestos)
+
+// Clasificador Geométrico O(1)
+ratio = d_max / d_min
+ratio < 2.0  → Isosceles  (quality=1.0)  // geometría óptima
+ratio 2.0-4.0 → Scalene   (quality=0.6)  // aceptable
+ratio > 4.0   → Cross     (quality=0.3)  // pobre
+
+// RANSAC-MAD Outlier Rejection
+threshold = max(3 × median_r, 2.0 unidades_de_grid)
+// Si quedan < 3 APs: forzar retener los 3 mejores (fallback geométrico)
+```
+
+**Flujo de `solveRobust()` — código real:**
+```javascript
+// PASS 1: Todos los sensores (incluyendo outliers)
+pass1 = solvePass(sensors, distances)
+
+// Calcular residual: r_i = |‖p̂-p_i‖ - R_i|
+sortedResid = residuals.sort(a→b)
+median_r = sortedResid[N//2].resid
+threshold = max(3 * median_r, 2.0)
+
+// Filtrar: keepIndices = {i : resid_i ≤ threshold}
+if keepIndices.length < 3: keepIndices = sortedResid.slice(0,3)
+culledCount = sensors.length - keepIndices.length
+
+// Si culledCount === 0: retornar Pass 1 directamente (+ GDOP + Topo + Coupling)
+// Si culledCount > 0:
+
+// PASS 2: Bilateral Coupling sobre set podado
+coupling = applyBilateralCoupling(prunedSensors, prunedDistances, pass1.p)
+pass2 = solvePass(prunedSensors, coupling.coupledDistances, pass1.p)
+// El octaedro THREE.js se renderiza ROJO si culledCount > 0 (fault detection visual)
+```
+
+**Acoplamiento Bilateral — lógica exacta:**
+```javascript
+static applyBilateralCoupling(sensors, distances, p_est) {
+    // Para cada par (i,j):
+    dTheta = |theta_i - theta_j|
+    if dTheta > PI: dTheta = 2*PI - dTheta  // normalización al rango [0, PI]
+    
+    if dTheta > 2.5:  // APs en lados opuestos (> 143°)
+        avg_err = (err_i + err_j) / 2
+        adj_i += 0.3 * (avg_err - err_i)   // κ = 0.3
+        adj_j += 0.3 * (avg_err - err_j)
+    
+    // Aplicar corrección a distancias originales:
+    coupledDistances[i] = distances[i] + adj[i]
+}
+```
+
+**Base-20 Maya en contexto de trilateration (grid real):**
+```javascript
+// Grid operativo: -10m a +10m (rango total = 20m)
+level = clip(floor((val - min) / (max - min) * 20), 0, 19)  // 5 bits = 0-19
+dequant = min + (level + 0.5) / 20 * (max - min)            // midpoint
+error_max = (max - min) / 40 = 20 / 40 = 0.5 metros        // error ≤ 0.5m garantizado
+
+// Para GuitarTune (frecuencias 28Hz-1400Hz):
+// Adaptar: cada octava dividida en 20 niveles = 3 cents/nivel de resolución
+```
+
+**6 nodos de sensor en el demo (hexagonal con centro):**
+```javascript
+const LMNodes = [
+    { x: -5, y:  5 }, { x:  5, y:  5 }, { x:  0, y: -6 },
+    { x: -6, y: -4 }, { x:  6, y: -4 }, { x:  0, y:  0 }
+];
+// Inyección de falla: 1 sensor aleatorio recibe ±15m de error (multipath/NLOS)
+// RANSAC-MAD lo detecta y cullea en Pass 1 (threshold = max(3·median_r, 2.0))
+```
+
+**GDOP — código exacto (O(N) por acumulación H^T·H):**
+```javascript
+static calculateGDOP(sensors, p) {
+    let a = 0, b = 0, d = 0;
+    for each sensor:
+        u = dx / dist, v = dy / dist  // vector unitario
+        a += u*u; b += u*v; d += v*v // acumulación H^T·H
+    
+    det = a*d - b*b
+    if |det| < 1e-10: return 99.0  // sensores colineales → GDOP inútil
+    
+    traceInv = (a + d) / det        // traza de (H^T·H)^-1
+    return sqrt(traceInv)
+}
+
+// Umbrales de calidad GDOP:
+GDOP < 2    → Verde   (Excelente, sensores bien distribuidos)
+2 ≤ GDOP ≤ 5 → Amarillo (Bueno)
+GDOP > 5    → Rojo    (Pobre, sensores casi colineales)
+GDOP = 99   → Rojo intenso (POOR — singularidad geométrica)
+```
+
+---
+
+### NEAT Environmental Index — Fórmula Completa y Pesos Verificados
+
+```javascript
+// Sub-índices ambientales (todos en rango 0-100%)
+b_th = clip((temp - 32) / (120 - 32) * 100, 0, 100)     // Térmica (°F: 32=frío, 120=extremo)
+b_mo = clip(humidity * (1 + rain * 0.05), 0, 100)         // Hídrica (humedad amplificada por lluvia)
+b_ki = clip((wind / 120.0) * 100, 0, 100)                 // Cinética (viento 0-120 km/h)
+b_pr = clip((1013 - press) / 30.0 * 100, 0, 100)          // Presión (caída desde 1013 hPa)
+
+// NEAT Fusion (Pesos exactos verificados en código):
+w = { thermal: 0.30, moisture: 0.30, kinetic: 0.20, pressure: 0.20 }
+neat_raw = 0.30·b_th + 0.30·b_mo + 0.20·b_ki + 0.20·b_pr
+neat = clip(round(neat_raw), 0, 100)
+
+// Umbrales Six Sigma (Control Chart):
+neat <  50  → Verde  (Normal — 0 impacto sistémico)
+neat 50-74  → Naranja (Estrés moderado — entropy += 0.10)
+neat ≥ 75   → Rojo   (Crisis severa — entropy += 0.35, coherence -= 0.25)
+```
+
+**Aplicación potencial a GuitarTune:**
+```
+NEAT-Audio = clip(round(
+    0.40 × b_ruido      +   // nivel de ruido ambiente (RMS)
+    0.30 × b_reverb     +   // reverberación (tasa de decaimiento de autocorrelación)
+    0.30 × b_distorsion     // THD armónico (distorsión del micrófono)
+), 0, 100)
+// → Índice de calidad acústica: mostrar al usuario si el entorno es bueno para afinar
+// neat < 30: "Buen ambiente para afinar" (verde)
+// neat 30-60: "Ruido moderado" (amarillo)
+// neat > 60: "Demasiado ruido — silencio recomendado" (rojo)
+```
+
+---
+
+### NeuralBus — Patrón Observer Verificado en Código
+
+```javascript
+class NeuralBus {
+    // 4 canales de comunicación independientes:
+    subscribe(fn) / emit(signal)         // Canal principal: telemetría de red
+    onReward(fn) / sendReward(event)     // Canal de recompensa: eventos RL
+    onConfigChange(fn) / setEngineConfig // Canal de configuración
+    onFlyGenome(fn) / setBestFlyGenome   // Canal de genomas (NEAT)
+    
+    // Buffer circular de historial:
+    MAX_HISTORY = 50  // últimos 50 eventos de recompensa guardados
+    
+    // Config default:
+    { neurons: 302, useConnectome: true, organism: 'drosophila_melanogaster' }
+    // 302 neuronas = C. elegans (referencia biológica base)
+    // Demo override: 133,000 neuronas (Drosophila brain completo)
+}
+
+// Tick rate: 16ms (~60Hz) para telemetría, 3s para eventos de recompensa
+```
+
+**Evento de Recompensa (estructura exacta):**
+```javascript
+event = {
+    source: 'predictor' | 'betting_agent',
+    value: +0.2 a +1.0 (win) | -0.1 a -0.6 (loss),
+    reason: 'Pattern Match Confirmed' | 'Prediction Error (LTD)',
+    confidence: 0.6 - 1.0,
+    timestamp: Date.now()
+}
+// LTD = Long-Term Depression (fenómeno biológico real de debilitamiento sináptico)
+// Win rate demo: 70% (isWin = Math.random() > 0.3)
+```
+
+---
+
+### Neuromoduladores — Dinámicas Exactas Verificadas
+
+```javascript
+// Tasas de actualización por tick (16ms):
+dopamine:        ±0.05/tick  (rápido — recompensa inmediata)
+acetylcholine:   ±0.08/tick  (más rápido — atención/foco)
+norepinephrine:  ±0.04/tick  (moderado — arousal)
+serotonin:       ±0.02/tick  (lento — baseline de estado de ánimo)
+
+// Acoplamiento con sistema de recompensa:
+on_win:  dopamine → 1.0 (máximo), norepinephrine → 0.9
+on_loss: dopamine → 0.1 (mínimo), norepinephrine → 0.9
+
+// Interpretación biológica:
+Dopamine (cyan #00ffcc):    tasa de aprendizaje / señal de recompensa
+Serotonin (magenta #ff00ff): mood/estabilidad / regularización
+Acetylcholine (yellow #ffff00): atención/foco / umbral de spike
+Norepinephrine (red #ff3300): arousal/urgencia / burst rate
+```
+
+---
+
+### Three.js Master Rail — Arquitectura de Visualización
+
+```javascript
+// 15 axones paralelos — waveguide sinusoidal:
+xOffset + sin(z * 0.05 + i) * 2  // oscilación en X
+yOffset + cos(z * 0.05 + i) * 2  // oscilación en Y
+// z: -100 a +100 (eje de propagación)
+
+// 3 tipos de señal:
+'normal':  SphereGeometry r=0.4, color=0x00ffff (azul), scale=1.0
+'reward':  SphereGeometry r=0.4, color=0xff00ff (magenta), scale=2.5×
+'LM':      OctahedronGeometry r=1.5, wireframe=true
+           color=0xffff00 (amarillo) si NO hubo outliers
+           color=0xff0000 (rojo)     si hubo culling (fault visual)
+
+// Camera: PerspectiveCamera fov=60, pos=(0,10,40), lookAt=(0,0,0)
+// Fog: FogExp2 #030508, density=0.015
+// Rotación: railGroup.rotation.z += 0.002 (continua, lenta)
+```
+
+---
+
+### Lo Que Aprendemos de Esta Arquitectura
+
+**1. El sistema es más completo de lo documentado previamente.**
+El TRIDENT-LM no es solo un algoritmo — es un sistema de telemetría en tiempo real con feedback loop:
+- LMEngine detecta fallas (outlier culling) → NeuralBus notifica → Three.js lo renderiza rojo → Auto-Reward ajusta dopamina
+
+**2. NEAT no es solo genéticos — es un índice ambiental propio.**
+El "NEAT Index" de Juan NO es el algoritmo genético NeuroEvolution of Augmenting Topologies. Es su propio sistema: **Neural Environmental Adaptive Telemetry** — índice 0-100 que mide estrés ambiental con pesos calibrados a mano (30/30/20/20).
+
+**3. La arquitectura observer (NeuralBus) es production-ready.**
+4 canales independientes, buffer circular, listener management — patrón exactamente como EventEmitter de Node.js pero sin dependencias externas. Copia directa en Kotlin: `Flow<Signal>` por canal.
+
+**4. La cuantización Base-20 aplica a coordenadas físicas (no solo pesos NN).**
+En el demo: grid de -10 a +10 metros → 20 niveles → error ≤ 0.5m. El mismo principio se aplica a frecuencias (GuitarTune), coordenadas GPS (LocalizaHN), y pesos sinápticos (ClonEngine).
+
+**5. El clasificador geométrico O(1) usa ratio d_max/d_min como proxy de calidad.**
+Thresholds exactos: <2=Isosceles (ideal), 2-4=Scalene (ok), >4=Cross (malo). Esta misma métrica se puede aplicar a la distribución de armónicos en pitch detection.
+
+---
+
 ## MEJORAS PENDIENTES PARA GUITARTUNE
 
 ### Mejora 1 — VigesimalCodec en FrequencyStabilizer (30 min)
