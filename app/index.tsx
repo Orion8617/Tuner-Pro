@@ -514,8 +514,9 @@ export default function TunerScreen() {
     ? Math.abs(cents) > 25 ? RED : Math.abs(cents) > 10 ? ORANGE : ACCENT_BRIGHT
     : TEXT_DIM;
 
+  const centsQ20 = Math.round(cents / 5) * 5;
   const centsDisplay = isDetecting
-    ? `${cents >= 0 ? (cents > 0 ? "" : "") : ""}${String(Math.abs(cents)).padStart(3, "0")}.0`
+    ? `${String(Math.abs(centsQ20)).padStart(3, "0")}.0`
     : "000.0";
 
   const sortedScaledStrings = [...scaledStrings].sort((a, b) => a.stringNumber - b.stringNumber);
