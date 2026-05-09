@@ -493,7 +493,7 @@ export default function TunerScreen() {
   }
 
   const instrumentIcon: Record<string, keyof typeof Ionicons.glyphMap> = {
-    guitar: "guitar-outline",
+    guitar: "musical-notes-outline",
     bass: "musical-notes-outline",
     ukulele: "musical-note-outline",
     other: "musical-notes-outline",

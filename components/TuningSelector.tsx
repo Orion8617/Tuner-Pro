@@ -76,7 +76,7 @@ const GENRE_ICONS: Record<string, string> = {
 };
 
 const INSTRUMENT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  guitar: "guitar-outline",
+  guitar: "musical-notes-outline",
   bass: "musical-notes-outline",
   ukulele: "musical-note-outline",
   other: "musical-notes-outline",
