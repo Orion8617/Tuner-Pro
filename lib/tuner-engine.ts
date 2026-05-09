@@ -13,6 +13,18 @@ export interface TuningConfig {
   strings: GuitarString[];
   isPremium: boolean;
   genre: string;
+  instrument: "guitar" | "bass" | "ukulele" | "other";
+}
+
+export type ReferenceA4 = 432 | 434 | 436 | 438 | 440 | 442 | 444 | 446;
+export const REFERENCE_A4_OPTIONS: ReferenceA4[] = [432, 434, 436, 438, 440, 442, 444, 446];
+
+export function getInstrumentFreqRange(tuning: TuningConfig): { min: number; max: number } {
+  switch (tuning.instrument) {
+    case "bass":    return { min: 28, max: 350 };
+    case "ukulele": return { min: 180, max: 1400 };
+    default:        return { min: 50,  max: 600  };
+  }
 }
 
 export const STANDARD_TUNING: GuitarString[] = [
@@ -32,6 +44,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     strings: STANDARD_TUNING,
     isPremium: false,
     genre: "All Genres",
+    instrument: "guitar",
   },
   {
     id: "double_drop_d",
@@ -47,6 +60,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: false,
     genre: "Folk / Acoustic",
+    instrument: "guitar",
   },
   {
     id: "open_c",
@@ -62,6 +76,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: false,
     genre: "Alternative / Folk",
+    instrument: "guitar",
   },
   {
     id: "all_fourths",
@@ -77,6 +92,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: false,
     genre: "Jazz / Fusion",
+    instrument: "guitar",
   },
   {
     id: "drop_d",
@@ -92,6 +108,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: true,
     genre: "Rock / Metal / Grunge",
+    instrument: "guitar",
   },
   {
     id: "open_g",
@@ -107,6 +124,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: true,
     genre: "Blues / Rock / Country",
+    instrument: "guitar",
   },
   {
     id: "dadgad",
@@ -122,6 +140,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: true,
     genre: "Celtic / Folk / Rock",
+    instrument: "guitar",
   },
   {
     id: "open_d",
@@ -137,6 +156,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: true,
     genre: "Blues / Folk / Slide",
+    instrument: "guitar",
   },
   {
     id: "open_e",
@@ -152,6 +172,7 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: true,
     genre: "Blues / Rock / Slide",
+    instrument: "guitar",
   },
   {
     id: "drop_c",
@@ -167,6 +188,147 @@ export const ALL_TUNINGS: TuningConfig[] = [
     ],
     isPremium: true,
     genre: "Metal / Hard Rock",
+    instrument: "guitar",
+  },
+
+  // ─── 7-STRING GUITAR ────────────────────────────────────────────────────────
+  {
+    id: "seven_standard",
+    name: "7-String Standard",
+    shortName: "BEADGBE",
+    strings: [
+      { name: "7", note: "B",  octave: 1, frequency: 61.74,  stringNumber: 7 },
+      { name: "6", note: "E",  octave: 2, frequency: 82.41,  stringNumber: 6 },
+      { name: "5", note: "A",  octave: 2, frequency: 110.0,  stringNumber: 5 },
+      { name: "4", note: "D",  octave: 3, frequency: 146.83, stringNumber: 4 },
+      { name: "3", note: "G",  octave: 3, frequency: 196.0,  stringNumber: 3 },
+      { name: "2", note: "B",  octave: 3, frequency: 246.94, stringNumber: 2 },
+      { name: "1", note: "E",  octave: 4, frequency: 329.63, stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "Metal / Progressive / Djent",
+    instrument: "guitar",
+  },
+  {
+    id: "seven_drop_a",
+    name: "7-String Drop A",
+    shortName: "AEADGBE",
+    strings: [
+      { name: "7", note: "A",  octave: 1, frequency: 55.0,   stringNumber: 7 },
+      { name: "6", note: "E",  octave: 2, frequency: 82.41,  stringNumber: 6 },
+      { name: "5", note: "A",  octave: 2, frequency: 110.0,  stringNumber: 5 },
+      { name: "4", note: "D",  octave: 3, frequency: 146.83, stringNumber: 4 },
+      { name: "3", note: "G",  octave: 3, frequency: 196.0,  stringNumber: 3 },
+      { name: "2", note: "B",  octave: 3, frequency: 246.94, stringNumber: 2 },
+      { name: "1", note: "E",  octave: 4, frequency: 329.63, stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "Metal / Djent",
+    instrument: "guitar",
+  },
+
+  // ─── BASS GUITAR ─────────────────────────────────────────────────────────────
+  {
+    id: "bass_standard",
+    name: "Bass Standard",
+    shortName: "EADG",
+    strings: [
+      { name: "4", note: "E", octave: 1, frequency: 41.20,  stringNumber: 4 },
+      { name: "3", note: "A", octave: 1, frequency: 55.0,   stringNumber: 3 },
+      { name: "2", note: "D", octave: 2, frequency: 73.42,  stringNumber: 2 },
+      { name: "1", note: "G", octave: 2, frequency: 98.0,   stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "All Genres",
+    instrument: "bass",
+  },
+  {
+    id: "bass_drop_d",
+    name: "Bass Drop D",
+    shortName: "DADG",
+    strings: [
+      { name: "4", note: "D", octave: 1, frequency: 36.71,  stringNumber: 4 },
+      { name: "3", note: "A", octave: 1, frequency: 55.0,   stringNumber: 3 },
+      { name: "2", note: "D", octave: 2, frequency: 73.42,  stringNumber: 2 },
+      { name: "1", note: "G", octave: 2, frequency: 98.0,   stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "Rock / Metal",
+    instrument: "bass",
+  },
+  {
+    id: "bass_5string",
+    name: "Bass 5-String",
+    shortName: "BEADG",
+    strings: [
+      { name: "5", note: "B", octave: 0, frequency: 30.87,  stringNumber: 5 },
+      { name: "4", note: "E", octave: 1, frequency: 41.20,  stringNumber: 4 },
+      { name: "3", note: "A", octave: 1, frequency: 55.0,   stringNumber: 3 },
+      { name: "2", note: "D", octave: 2, frequency: 73.42,  stringNumber: 2 },
+      { name: "1", note: "G", octave: 2, frequency: 98.0,   stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "All Genres",
+    instrument: "bass",
+  },
+  {
+    id: "bass_5string_drop_a",
+    name: "Bass 5-String Drop A",
+    shortName: "AEADG",
+    strings: [
+      { name: "5", note: "A", octave: 0, frequency: 27.5,   stringNumber: 5 },
+      { name: "4", note: "E", octave: 1, frequency: 41.20,  stringNumber: 4 },
+      { name: "3", note: "A", octave: 1, frequency: 55.0,   stringNumber: 3 },
+      { name: "2", note: "D", octave: 2, frequency: 73.42,  stringNumber: 2 },
+      { name: "1", note: "G", octave: 2, frequency: 98.0,   stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "Metal / Funk",
+    instrument: "bass",
+  },
+
+  // ─── UKULELE ──────────────────────────────────────────────────────────────
+  {
+    id: "ukulele_standard",
+    name: "Ukulele Standard",
+    shortName: "GCEA",
+    strings: [
+      { name: "4", note: "G", octave: 4, frequency: 392.0,  stringNumber: 4 },
+      { name: "3", note: "C", octave: 4, frequency: 261.63, stringNumber: 3 },
+      { name: "2", note: "E", octave: 4, frequency: 329.63, stringNumber: 2 },
+      { name: "1", note: "A", octave: 4, frequency: 440.0,  stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "Pop / Folk / Hawaiian",
+    instrument: "ukulele",
+  },
+  {
+    id: "ukulele_low_g",
+    name: "Ukulele Low G",
+    shortName: "GCEA (Low)",
+    strings: [
+      { name: "4", note: "G", octave: 3, frequency: 196.0,  stringNumber: 4 },
+      { name: "3", note: "C", octave: 4, frequency: 261.63, stringNumber: 3 },
+      { name: "2", note: "E", octave: 4, frequency: 329.63, stringNumber: 2 },
+      { name: "1", note: "A", octave: 4, frequency: 440.0,  stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "Fingerpicking / Jazz",
+    instrument: "ukulele",
+  },
+  {
+    id: "ukulele_baritone",
+    name: "Baritone Ukulele",
+    shortName: "DGBE",
+    strings: [
+      { name: "4", note: "D", octave: 3, frequency: 146.83, stringNumber: 4 },
+      { name: "3", note: "G", octave: 3, frequency: 196.0,  stringNumber: 3 },
+      { name: "2", note: "B", octave: 3, frequency: 246.94, stringNumber: 2 },
+      { name: "1", note: "E", octave: 4, frequency: 329.63, stringNumber: 1 },
+    ],
+    isPremium: true,
+    genre: "Classical / Jazz",
+    instrument: "ukulele",
   },
 ];
 
@@ -178,12 +340,19 @@ export function getPremiumTunings(): TuningConfig[] {
   return ALL_TUNINGS.filter(t => t.isPremium);
 }
 
+export function getTuningsByInstrument(instrument: TuningConfig["instrument"]): TuningConfig[] {
+  return ALL_TUNINGS.filter(t => t.instrument === instrument);
+}
+
 export const ALL_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 
 const LOG2 = Math.log(2);
 
-export function frequencyToNote(frequency: number): { note: string; octave: number; cents: number } {
-  const noteNum = 12 * (Math.log(frequency / 440) / LOG2);
+export function frequencyToNote(
+  frequency: number,
+  referenceA4: ReferenceA4 = 440
+): { note: string; octave: number; cents: number } {
+  const noteNum = 12 * (Math.log(frequency / referenceA4) / LOG2);
   const roundedNote = Math.round(noteNum);
   const cents = Math.round((noteNum - roundedNote) * 100);
   const noteIndex = ((roundedNote % 12) + 12 + 9) % 12;
@@ -191,8 +360,22 @@ export function frequencyToNote(frequency: number): { note: string; octave: numb
   return { note: ALL_NOTES[noteIndex], octave, cents };
 }
 
-export function findClosestString(frequency: number, tuning: GuitarString[] = STANDARD_TUNING): GuitarString | null {
-  if (frequency < 50 || frequency > 600) return null;
+export function scaleStringsToReference(
+  strings: GuitarString[],
+  referenceA4: ReferenceA4
+): GuitarString[] {
+  if (referenceA4 === 440) return strings;
+  const ratio = referenceA4 / 440;
+  return strings.map(s => ({ ...s, frequency: s.frequency * ratio }));
+}
+
+export function findClosestString(
+  frequency: number,
+  tuning: GuitarString[] = STANDARD_TUNING,
+  freqMin = 50,
+  freqMax = 600
+): GuitarString | null {
+  if (frequency < freqMin || frequency > freqMax) return null;
 
   let closest: GuitarString | null = null;
   let minCents = Infinity;
@@ -218,7 +401,12 @@ export function getTuningStatus(cents: number): "flat" | "sharp" | "in_tune" {
   return "in_tune";
 }
 
-export function autoCorrelate(buffer: Float32Array, sampleRate: number): number {
+export function autoCorrelate(
+  buffer: Float32Array,
+  sampleRate: number,
+  minFreq = 50,
+  maxFreq = 600
+): number {
   const size = buffer.length;
 
   let rms = 0;
@@ -227,7 +415,9 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
   }
   rms = Math.sqrt(rms / size);
 
-  if (rms < 0.03) return -1;
+  // Lower RMS threshold for bass frequencies (weaker signal from thick strings)
+  const rmsThreshold = minFreq < 50 ? 0.015 : 0.03;
+  if (rms < rmsThreshold) return -1;
 
   let r1 = 0;
   let r2 = size - 1;
@@ -278,12 +468,19 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
 
   const frequency = sampleRate / T0;
 
-  if (frequency < 50 || frequency > 600) return -1;
+  if (frequency < minFreq || frequency > maxFreq) return -1;
 
-  const minConfidence = frequency > 250 ? 0.55 : 0.65;
+  // Adaptive confidence thresholds — bass requires lower threshold (harder to detect)
+  const isBass = minFreq < 50;
+  let minConfidence: number;
+  if (isBass) {
+    minConfidence = 0.45;
+  } else {
+    minConfidence = frequency > 250 ? 0.55 : 0.65;
+  }
   if (confidence < minConfidence) return -1;
 
-  const minRms = frequency > 250 ? 0.035 : 0.05;
+  const minRms = isBass ? 0.02 : (frequency > 250 ? 0.035 : 0.05);
   if (rms < minRms) return -1;
 
   return frequency;
@@ -364,13 +561,11 @@ export class FrequencyStabilizer {
   private _medianNoAlloc(): number | null {
     const n = this.count;
 
-    // Copy circular buffer → sort scratchpad (zero allocations)
     for (let i = 0; i < n; i++) {
       const idx = (this.head - n + i + this.maxHistory) % this.maxHistory;
       this.sortBuf[i] = this.buf[idx];
     }
 
-    // Insertion sort — O(n²) but n≤6, avoids Array.sort callback overhead
     for (let i = 1; i < n; i++) {
       const key = this.sortBuf[i];
       let j = i - 1;
@@ -381,12 +576,10 @@ export class FrequencyStabilizer {
       this.sortBuf[j + 1] = key;
     }
 
-    // Stability gate: reject reading if range exceeds threshold
     const rangeCents = 1200 * (Math.log(this.sortBuf[n - 1] / this.sortBuf[0]) / LOG2);
     this.lastRangeCents = rangeCents;
     if (rangeCents > this.stabilityThresholdCents) return null;
 
-    // Median (no new array needed — sortBuf already sorted)
     const mid = n >> 1;
     return n % 2 === 0
       ? (this.sortBuf[mid - 1] + this.sortBuf[mid]) * 0.5
@@ -394,8 +587,6 @@ export class FrequencyStabilizer {
   }
 
   // GDOP-inspired confidence: 0.0 (no signal) → 1.0 (perfect lock)
-  // fillRatio: how many of the 6 history slots are used
-  // stabilityRatio: how tight the readings cluster (cents spread → 0 = locked)
   getConfidence(): number {
     if (this.count < this.minReadings) return 0;
     const fillRatio      = this.count / this.maxHistory;

@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
-import { TuningConfig, getFreeTunings, getPremiumTunings } from "@/lib/tuner-engine";
+import { TuningConfig, getFreeTunings, getPremiumTunings, getTuningsByInstrument } from "@/lib/tuner-engine";
 import { t } from "@/lib/i18n";
 
 const ACCENT = "#4AEDC4";
@@ -46,6 +46,13 @@ const GENRE_ORDER = [
   "Blues / Folk / Slide",
   "Blues / Rock / Slide",
   "Metal / Hard Rock",
+  "Metal / Progressive / Djent",
+  "Metal / Djent",
+  "Rock / Metal",
+  "Metal / Funk",
+  "Pop / Folk / Hawaiian",
+  "Fingerpicking / Jazz",
+  "Classical / Jazz",
 ];
 
 const GENRE_ICONS: Record<string, string> = {
@@ -59,6 +66,27 @@ const GENRE_ICONS: Record<string, string> = {
   "Blues / Folk / Slide": "water-outline",
   "Blues / Rock / Slide": "flame-outline",
   "Metal / Hard Rock": "skull-outline",
+  "Metal / Progressive / Djent": "skull-outline",
+  "Metal / Djent": "skull-outline",
+  "Rock / Metal": "flash-outline",
+  "Metal / Funk": "flash-outline",
+  "Pop / Folk / Hawaiian": "sunny-outline",
+  "Fingerpicking / Jazz": "cafe-outline",
+  "Classical / Jazz": "cafe-outline",
+};
+
+const INSTRUMENT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  guitar: "guitar-outline",
+  bass: "musical-notes-outline",
+  ukulele: "musical-note-outline",
+  other: "musical-notes-outline",
+};
+
+const INSTRUMENT_LABELS: Record<string, string> = {
+  guitar: "Guitar",
+  bass: "Bass",
+  ukulele: "Ukulele",
+  other: "Other",
 };
 
 function groupByGenre(tunings: TuningConfig[]) {
@@ -69,6 +97,18 @@ function groupByGenre(tunings: TuningConfig[]) {
   }
   return map;
 }
+
+function groupByInstrument(tunings: TuningConfig[]) {
+  const map: Record<string, TuningConfig[]> = {};
+  for (const t of tunings) {
+    const key = t.instrument;
+    if (!map[key]) map[key] = [];
+    map[key].push(t);
+  }
+  return map;
+}
+
+const INSTRUMENT_ORDER = ["guitar", "bass", "ukulele", "other"];
 
 export default function TuningSelector({
   currentTuning,
@@ -81,7 +121,10 @@ export default function TuningSelector({
 
   const freeTunings = getFreeTunings();
   const premiumTunings = getPremiumTunings();
-  const premiumByGenre = groupByGenre(premiumTunings);
+  const premiumGuitarTunings = premiumTunings.filter(t => t.instrument === "guitar");
+  const premiumOtherTunings = premiumTunings.filter(t => t.instrument !== "guitar");
+  const premiumGuitarByGenre = groupByGenre(premiumGuitarTunings);
+  const premiumOtherByInstrument = groupByInstrument(premiumOtherTunings);
 
   function handleSelect(tuning: TuningConfig) {
     if (tuning.isPremium && !isPremiumUser) {
@@ -211,7 +254,7 @@ export default function TuningSelector({
                 </Text>
               )}
 
-              {Object.entries(premiumByGenre)
+              {Object.entries(premiumGuitarByGenre)
                 .sort(([a], [b]) => {
                   const ia = GENRE_ORDER.indexOf(a);
                   const ib = GENRE_ORDER.indexOf(b);
@@ -226,6 +269,29 @@ export default function TuningSelector({
                         color={TEXT_DIM}
                       />
                       <Text style={styles.genreLabel}>{genre}</Text>
+                    </View>
+                    {tunings.map(renderTuningItem)}
+                  </View>
+                ))}
+
+              {Object.entries(premiumOtherByInstrument)
+                .sort(([a], [b]) => INSTRUMENT_ORDER.indexOf(a) - INSTRUMENT_ORDER.indexOf(b))
+                .map(([instrument, tunings]) => (
+                  <View key={instrument}>
+                    <View style={[styles.sectionDivider, { marginTop: 10 }]} />
+                    <View style={styles.instrumentSectionHeader}>
+                      <Ionicons
+                        name={INSTRUMENT_ICONS[instrument] ?? "musical-notes-outline"}
+                        size={13}
+                        color={ACCENT}
+                      />
+                      <Text style={styles.instrumentSectionTitle}>
+                        {INSTRUMENT_LABELS[instrument] ?? instrument}
+                      </Text>
+                      <View style={styles.premiumBadgeSmall}>
+                        <Ionicons name="diamond" size={9} color={PREMIUM_COLOR} />
+                        <Text style={styles.premiumBadgeText}>PRO</Text>
+                      </View>
                     </View>
                     {tunings.map(renderTuningItem)}
                   </View>
@@ -454,5 +520,18 @@ const styles = StyleSheet.create({
     color: ACCENT,
     fontWeight: "600" as const,
     letterSpacing: 0.3,
+  },
+  instrumentSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  instrumentSectionTitle: {
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: TEXT_PRIMARY,
+    flex: 1,
   },
 });

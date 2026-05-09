@@ -37,10 +37,11 @@ const PHANTOM_PURPLE = "#7B3FE4";
 const SOL_ORANGE = "#F7931A";
 
 const FEATURE_CHECKLIST = [
-  { icon: "musical-notes" as const, label: "6 Premium Tunings", sub: "Drop D, Open G, DADGAD, Open D, Open E, Drop C", pro: true },
-  { icon: "speedometer" as const, label: "Advanced Pitch Detection", sub: "Ultra-precise, low-latency algorithm", pro: true },
+  { icon: "musical-notes" as const, label: "6 Premium Guitar Tunings", sub: "Drop D, Open G, DADGAD, Open D, Open E, Drop C", pro: true },
+  { icon: "musical-note" as const, label: "Bass & Ukulele", sub: "4/5-string bass, ukulele, 7-string guitar", pro: true },
+  { icon: "options" as const, label: "Reference Pitch A4", sub: "432 · 440 · 442 · 444 Hz — studio calibration", pro: true },
+  { icon: "speedometer" as const, label: "Advanced Pitch Detection", sub: "Bass range 30 Hz — ultra-precise algorithm", pro: true },
   { icon: "analytics" as const, label: "Tuning History", sub: "Track your sessions over time", pro: true },
-  { icon: "color-palette" as const, label: "Custom Themes", sub: "Personalise your tuner", pro: true },
   { icon: "radio" as const, label: "Standard Tuner (EADGBE)", sub: "Always free, always fast", pro: false },
   { icon: "git-branch" as const, label: "3 Free Alternate Tunings", sub: "Double Drop D, Open C, All Fourths", pro: false },
 ];

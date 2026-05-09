@@ -33,12 +33,16 @@ import {
   ALL_TUNINGS,
   TuningConfig,
   GuitarString,
+  ReferenceA4,
+  REFERENCE_A4_OPTIONS,
   frequencyToNote,
   findClosestString,
   getCentsFromTarget,
   getTuningStatus,
   autoCorrelate,
   FrequencyStabilizer,
+  getInstrumentFreqRange,
+  scaleStringsToReference,
 } from "@/lib/tuner-engine";
 
 const ACCENT = "#4AEDC4";
@@ -257,6 +261,7 @@ export default function TunerScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const [currentTuning, setCurrentTuning] = useState<TuningConfig>(ALL_TUNINGS[0]);
+  const [referenceA4, setReferenceA4] = useState<ReferenceA4>(440);
   const [isListening, setIsListening] = useState(false);
   const [detectedNote, setDetectedNote] = useState<string | null>(null);
   const [detectedOctave, setDetectedOctave] = useState<number | null>(null);
@@ -284,9 +289,20 @@ export default function TunerScreen() {
   const safeTop = Platform.OS === "web" ? 67 : insets.top;
   const safeBottom = Platform.OS === "web" ? 34 : insets.bottom;
 
+  const freqRange = getInstrumentFreqRange(currentTuning);
+  const scaledStrings = scaleStringsToReference(currentTuning.strings, referenceA4);
+
   const isDetecting = isListening && detectedFrequency > 0;
   const tuningStatus = isDetecting ? getTuningStatus(cents) : null;
   const isInTune = tuningStatus === "in_tune";
+
+  function cycleReferenceA4() {
+    setReferenceA4(prev => {
+      const idx = REFERENCE_A4_OPTIONS.indexOf(prev);
+      return REFERENCE_A4_OPTIONS[(idx + 1) % REFERENCE_A4_OPTIONS.length];
+    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
 
   const dialSize = Math.min(screenWidth * 0.95, 380);
 
@@ -344,20 +360,26 @@ export default function TunerScreen() {
     wasInTuneRef.current = inTune;
   }
 
+  const referenceA4Ref = useRef<ReferenceA4>(440);
+  useEffect(() => { referenceA4Ref.current = referenceA4; }, [referenceA4]);
+
   const handleNativePitch = useCallback((data: { frequency: number; note: string; octave: number; cents: number }) => {
     if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
     const freq = data.frequency;
-    const closest = findClosestString(freq, currentTuningRef.current.strings);
+    const range = getInstrumentFreqRange(currentTuningRef.current);
+    const scaled = scaleStringsToReference(currentTuningRef.current.strings, referenceA4Ref.current);
+    const closest = findClosestString(freq, scaled, range.min, range.max);
+    const noteInfo = frequencyToNote(freq, referenceA4Ref.current);
     setDetectedFrequency(freq);
-    setDetectedNote(data.note);
-    setDetectedOctave(data.octave);
+    setDetectedNote(noteInfo.note);
+    setDetectedOctave(noteInfo.octave);
     setDetectedString(closest);
     if (closest) {
       const c = getCentsFromTarget(freq, closest.frequency);
       setCents(c);
       triggerInTuneHaptic(c);
     } else {
-      setCents(data.cents);
+      setCents(noteInfo.cents);
     }
   }, []);
 
@@ -422,13 +444,15 @@ export default function TunerScreen() {
     function tick() {
       if (!analyserRef.current) return;
       analyserRef.current.getFloatTimeDomainData(buffer);
-      const rawFrequency = autoCorrelate(buffer, audioContext!.sampleRate);
+      const range = getInstrumentFreqRange(currentTuningRef.current);
+      const rawFrequency = autoCorrelate(buffer, audioContext!.sampleRate, range.min, range.max);
       const stableFrequency = stabilizerRef.current.push(rawFrequency);
       setConfidence(stabilizerRef.current.getConfidence());
-      if (stableFrequency !== null && stableFrequency > 50 && stableFrequency < 500) {
+      if (stableFrequency !== null && stableFrequency >= range.min && stableFrequency <= range.max) {
         if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
-        const noteInfo = frequencyToNote(stableFrequency);
-        const closest = findClosestString(stableFrequency, currentTuningRef.current.strings);
+        const noteInfo = frequencyToNote(stableFrequency, referenceA4Ref.current);
+        const scaled = scaleStringsToReference(currentTuningRef.current.strings, referenceA4Ref.current);
+        const closest = findClosestString(stableFrequency, scaled, range.min, range.max);
         setDetectedFrequency(stableFrequency);
         setDetectedNote(noteInfo.note);
         setDetectedOctave(noteInfo.octave);
@@ -465,7 +489,22 @@ export default function TunerScreen() {
     setCurrentTuning(tuning);
     setDetectedString(null); setDetectedNote(null); setDetectedOctave(null);
     setDetectedFrequency(0); setCents(0); setTunedStrings(new Set());
+    stabilizerRef.current.reset();
   }
+
+  const instrumentIcon: Record<string, keyof typeof Ionicons.glyphMap> = {
+    guitar: "guitar-outline",
+    bass: "musical-notes-outline",
+    ukulele: "musical-note-outline",
+    other: "musical-notes-outline",
+  };
+
+  const instrumentLabel: Record<string, string> = {
+    guitar: t("instrument.guitar"),
+    bass: t("instrument.bass"),
+    ukulele: t("instrument.ukulele"),
+    other: t("instrument.other"),
+  };
 
   const statusColor = isInTune ? ACCENT
     : tuningStatus === "flat" || tuningStatus === "sharp"
@@ -476,11 +515,12 @@ export default function TunerScreen() {
     ? `${cents >= 0 ? (cents > 0 ? "" : "") : ""}${String(Math.abs(cents)).padStart(3, "0")}.0`
     : "000.0";
 
-  const sortedStrings = [...currentTuning.strings].sort((a, b) => a.stringNumber - b.stringNumber);
+  const sortedScaledStrings = [...scaledStrings].sort((a, b) => a.stringNumber - b.stringNumber);
 
   const stringAreaWidth = Math.min(screenWidth - 40, 360);
-  const stringSpacing = stringAreaWidth / 7;
-  const thicknesses = [3.5, 3, 2.5, 2, 1.5, 1.2];
+  const numStrings = sortedScaledStrings.length;
+  const stringSpacing = stringAreaWidth / (numStrings + 1);
+  const thicknesses = [3.5, 3, 2.5, 2, 1.5, 1.2, 1.0];
 
   return (
     <View style={[styles.container, { backgroundColor: BG }]}>
@@ -607,6 +647,37 @@ export default function TunerScreen() {
             </View>
           )}
 
+          {/* ===== INSTRUMENT + REFERENCE PITCH ROW ===== */}
+          <View style={styles.metaRow}>
+            {currentTuning.instrument !== "guitar" && (
+              <View style={styles.instrumentBadge}>
+                <Ionicons
+                  name={instrumentIcon[currentTuning.instrument] ?? "musical-notes-outline"}
+                  size={9}
+                  color={ACCENT}
+                />
+                <Text style={styles.instrumentBadgeText}>
+                  {instrumentLabel[currentTuning.instrument]}
+                </Text>
+              </View>
+            )}
+            <Pressable
+              onPress={cycleReferenceA4}
+              style={({ pressed }) => [
+                styles.refPitchPill,
+                referenceA4 !== 440 && styles.refPitchPillActive,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={[
+                styles.refPitchText,
+                referenceA4 !== 440 && { color: ACCENT },
+              ]}>
+                A = {referenceA4}
+              </Text>
+            </Pressable>
+          </View>
+
           {/* ===== STATUS INDICATOR ===== */}
           <View style={styles.statusRow}>
             {isDetecting && tuningStatus ? (
@@ -629,28 +700,31 @@ export default function TunerScreen() {
 
           {/* ===== STRING SELECTOR ===== */}
           <View style={styles.stringSelector}>
-            {sortedStrings.map((str) => {
-              const isActive = detectedString?.stringNumber === str.stringNumber;
-              const isTuned = tunedStrings.has(str.stringNumber);
-              return (
-                <StringIndicator
-                  key={str.stringNumber}
-                  str={str}
-                  isActive={isActive}
-                  isTuned={isTuned}
-                  isInTune={isInTune}
-                  statusColor={statusColor}
-                />
-              );
-            })}
+            {scaledStrings
+              .slice()
+              .sort((a, b) => a.stringNumber - b.stringNumber)
+              .map((str) => {
+                const isActive = detectedString?.stringNumber === str.stringNumber;
+                const isTuned = tunedStrings.has(str.stringNumber);
+                return (
+                  <StringIndicator
+                    key={str.stringNumber}
+                    str={str}
+                    isActive={isActive}
+                    isTuned={isTuned}
+                    isInTune={isInTune}
+                    statusColor={statusColor}
+                  />
+                );
+              })}
           </View>
 
           {/* ===== STRINGS VISUAL ===== */}
           <View style={[styles.stringsVisual, { width: stringAreaWidth, marginBottom: safeBottom + 10 }]}>
-            {sortedStrings.map((str, i) => {
+            {sortedScaledStrings.map((str, i) => {
               const isActive = detectedString?.stringNumber === str.stringNumber;
               const isTuned = tunedStrings.has(str.stringNumber);
-              const thickness = thicknesses[i] || 2;
+              const thickness = thicknesses[i] || 1.0;
               const xPos = stringSpacing * (i + 1);
 
               return (
@@ -790,6 +864,51 @@ const styles = StyleSheet.create({
     minHeight: 60,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.05)",
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 6,
+    minHeight: 20,
+  },
+  instrumentBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(74, 237, 196, 0.08)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(74, 237, 196, 0.15)",
+  },
+  instrumentBadgeText: {
+    fontSize: 9,
+    fontWeight: "700" as const,
+    color: ACCENT,
+    letterSpacing: 0.6,
+    textTransform: "uppercase" as const,
+  },
+  refPitchPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  refPitchPillActive: {
+    borderColor: "rgba(74, 237, 196, 0.2)",
+    backgroundColor: "rgba(74, 237, 196, 0.06)",
+  },
+  refPitchText: {
+    fontSize: 9,
+    fontWeight: "600" as const,
+    color: "rgba(255,255,255,0.35)",
+    letterSpacing: 0.4,
+    fontVariant: ["tabular-nums"] as any,
   },
   topRightGroup: {
     flexDirection: "row",

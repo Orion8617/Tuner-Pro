@@ -10,6 +10,10 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- **2026-05-09**: Added professional/multi-instrument support — Bass guitar (4-str, 5-str, Drop D, Drop A), Ukulele (Standard GCEA, Low-G, Baritone), 7-String guitar (Standard, Drop A). Added `instrument` field to `TuningConfig`. Extended `autoCorrelate` to 28Hz minimum for bass detection. Added `getInstrumentFreqRange()` and `scaleStringsToReference()` helpers.
+- **2026-05-09**: Added Reference Pitch A4 selector — cycles through 432/434/436/438/440/442/444/446 Hz. Displayed as compact pill in main screen (glows cyan when non-standard). Affects `frequencyToNote`, `findClosestString`, and all frequency calculations. Critical for studio musicians and classical players.
+- **2026-05-09**: TuningSelector now groups by instrument (Guitar → Bass → Ukulele sections) for clear multi-instrument navigation. Added instrument badge in main screen when non-guitar tuning is active.
+- **2026-05-09**: Updated `ALL_TUNINGS` from 10 → 20 tunings. Updated landing page from "10 Guitar Tunings" → "20+ Instrument Tunings". Updated premium screen feature checklist to highlight Bass & Ukulele and Reference Pitch as pro features.
 - **2026-02-13**: Added 3-tier pricing model: Monthly ($1.99/mo), Annual ($9.99/yr), Lifetime ($14.99 one-time) with full i18n support and backend webhook handling for lifetime purchases
 - **2026-02-13**: Complete UI redesign to professional digital tuner aesthetic — dark theme (#0A0A0A) with cyan/teal accent (#4AEDC4), large semicircular dial meter (41 outer segments, 81 inner ticks, color-coded zones), LCD-style frequency/cents displays, big note character (72px), horizontal string selector with frequencies, vertical string visualization at bottom, compact mic button with tuning selector
 - **2026-02-08**: Added bilingual i18n system (`lib/i18n.ts`) with 68+ translation keys, auto-detects device locale (English primary, Spanish secondary)
