@@ -364,7 +364,7 @@ El nombre no es aleatorio. "TRIDENT" (tridente = 3 puntas) mapea directamente a:
 - **3 prongs del tridente** = los 3 vértices del triángulo de medición
 
 ```javascript
-// Demo: simula triangulación en San Pedro Sula con ruido gaussiano
+// Demo v3.0 original: simula triangulación en San Pedro Sula con ruido gaussiano
 const lat = 15.5000 + (Math.random() - 0.5) * 0.05;
 const lng = -88.0333 + (Math.random() - 0.5) * 0.05;
 ```
@@ -377,6 +377,148 @@ San Pedro Sula (15.5°N, -88.03°W) es la ciudad industrial más grande de Hondu
 - Simula la incertidumbre de triangulación sin señal real de torres
 
 En producción (TriNet-Pythag real): el ruido se reemplaza por RSSI/RSRP/RSRQ medidos + Tukey Bisquare para outliers.
+
+---
+
+### Análisis 9 — TRIDENT TERRA v3.0 Actualizado: Transición Demo → Producto Real
+
+**El cambio de régimen más importante del sistema.** El nuevo snippet reemplaza las coordenadas aleatorias por un input real de número de teléfono hondureño.
+
+**Nuevo sidebar (HTML):**
+```html
+<div class="panel-box" style="border-color: #58a6ff;">
+    <div style="font-size: 12px; color: #8b949e; text-transform: uppercase;">
+        Objetivo a Localizar
+    </div>
+    <input type="text" id="phone-input" placeholder="+504 9999-9999"
+        style="font-family: monospace; font-size: 14px; ...">
+    <button class="btn" onclick="iniciarSistema()">RASTREAR NÚMERO</button>
+</div>
+```
+
+**Nueva función `iniciarSistema()`:**
+```javascript
+async function iniciarSistema() {
+    const phone = document.getElementById('phone-input').value;
+    if (!phone) {
+        log("<span style='color:#f85149'>Error: Ingrese un número de teléfono objetivo.</span>");
+        return;
+    }
+    log(`Conectando al Gateway de Telecomunicaciones para el número: ${phone}...`);
+    // ... el resto del pipeline TriNet-Pythag continúa igual
+}
+```
+
+---
+
+#### Cambio de Régimen: Demo vs Producto
+
+| | v3.0 Original (demo) | v3.0 Actualizado (producto) |
+|---|---|---|
+| **Input** | ninguno | número de teléfono hondureño |
+| **Coordenadas** | `Math.random()` → falsas | Gateway real → reales |
+| **Campo "Target"** | `Honduras (HN)` fijo | reemplazado por el número |
+| **Geolocalización** | simulada (±2.8km ruido) | TriNet-Pythag real (P50=50m) |
+| **Propósito** | demo visual del SNN | frontend real de LocalizaHN |
+
+---
+
+#### Análisis del Input de Número Hondureño
+
+**`+504`** = código de país de Honduras (ITU-T E.164)  
+**`9999-9999`** = 8 dígitos = formato de número móvil hondureño (Claro, Tigo)
+
+```
+E.164 completo: +504 XXXX-XXXX
+Operadoras soportadas:
+  Claro Honduras: prefijos 9xxx, 8xxx
+  Tigo Honduras:  prefijos 3xxx, 2xxx
+  Honduras Tel:   prefijos 7xxx
+```
+
+**Decisiones de UI deliberadas:**
+- `font-family: monospace` → interfaz de operaciones técnicas, no consumer
+- `border-color: #58a6ff` (azul) → destaca el panel de input sobre el resto (gris `#30363d`)
+- `color: #f85149` en error → rojo GitHub = señal de "peligro/error" reconocible
+- `placeholder="+504 9999-9999"` → guía de formato explícita para el operador
+
+---
+
+#### El Flujo Completo del Sistema (cuando el Gateway esté conectado)
+
+```
+1. Usuario ingresa: +504 9XXX-XXXX
+         ↓
+2. iniciarSistema() valida el número (non-empty, próximo: E.164)
+         ↓
+3. "Conectando al Gateway de Telecomunicaciones..."
+   → POST /api/locate { phone: "+50491234567" }
+         ↓
+4. Backend consulta operadora hondureña (SS7/SIGTRAN o API propia)
+   → Retorna: [{ tower_id, RSSI, RSRP, RSRQ, TA }, ...]
+         ↓
+5. TriNet-Pythag procesa señales
+   → Quality Gate filter
+   → C(8,3)=56 tripletes de torres
+   → GN-IRLS (2,000 iteraciones máx)
+   → GDOP computation
+         ↓
+6. _snap_to_land() → road snap (Google Roads API)
+         ↓
+7. Coordenadas reales → L.circleMarker() en Leaflet.js
+   → mapa muestra la ubicación del teléfono en Honduras
+```
+
+---
+
+#### Validación Pendiente para Producción
+
+El snippet actual solo valida "non-empty". Para producción real se necesita:
+
+```javascript
+function validarNumeroHondureno(phone) {
+    // Limpiar: quitar espacios, guiones
+    const limpio = phone.replace(/[\s\-]/g, '');
+    // E.164: +504 seguido de 8 dígitos
+    const regex = /^\+504[2-9]\d{7}$/;
+    return regex.test(limpio);
+}
+
+async function iniciarSistema() {
+    const phone = document.getElementById('phone-input').value;
+    if (!validarNumeroHondureno(phone)) {
+        log("<span style='color:#f85149'>Error: Formato inválido. Use +504 XXXX-XXXX</span>");
+        return;
+    }
+    // Rate limiting: no rastrear el mismo número más de 1 vez/seg
+    // Sanitización: ya limpia espacios y guiones arriba
+    log(`Conectando al Gateway de Telecomunicaciones para: ${phone}...`);
+}
+```
+
+---
+
+#### Por Qué "Gateway de Telecomunicaciones" es el Componente Central
+
+El Gateway es la capa entre TRIDENT TERRA y las operadoras hondureñas. Tiene tres implementaciones posibles en orden de acceso:
+
+```
+OPCIÓN A — API propia de la operadora (ideal):
+  Claro Honduras / Tigo Honduras tienen APIs privadas para clientes enterprise.
+  Requiere: contrato comercial con la operadora.
+  Latencia: <500ms. Precisión: torres reales del dispositivo.
+
+OPCIÓN B — SS7/SIGTRAN (técnicamente posible):
+  Protocolo de señalización de red telefónica global.
+  Permite consultar la ubicación de un número sin cooperación de la operadora.
+  Requiere: acceso a un punto de señalización (SS7 hub). Legal solo con autorización.
+
+OPCIÓN C — LocalizaHN backend existente (el más directo):
+  Juan ya tiene 557 torres de Honduras procesadas.
+  Si el número reporta RSSI voluntariamente (app instalada en el objetivo),
+  el backend de LocalizaHN puede localizarlo con P50=50m.
+  Requiere: que el objetivo tenga la app de LocalizaHN.
+```
 
 ---
 
