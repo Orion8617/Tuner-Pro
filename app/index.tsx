@@ -265,6 +265,7 @@ export default function TunerScreen() {
   const [detectedString, setDetectedString] = useState<GuitarString | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [tunedStrings, setTunedStrings] = useState<Set<number>>(new Set());
+  const [confidence, setConfidence] = useState(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -423,6 +424,7 @@ export default function TunerScreen() {
       analyserRef.current.getFloatTimeDomainData(buffer);
       const rawFrequency = autoCorrelate(buffer, audioContext!.sampleRate);
       const stableFrequency = stabilizerRef.current.push(rawFrequency);
+      setConfidence(stabilizerRef.current.getConfidence());
       if (stableFrequency !== null && stableFrequency > 50 && stableFrequency < 500) {
         if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
         const noteInfo = frequencyToNote(stableFrequency);
@@ -441,7 +443,7 @@ export default function TunerScreen() {
       } else if (rawFrequency <= 0 && !silenceTimeoutRef.current) {
         silenceTimeoutRef.current = setTimeout(() => {
           setDetectedFrequency(0); setDetectedNote(null); setDetectedOctave(null);
-          setDetectedString(null); setCents(0); silenceTimeoutRef.current = null;
+          setDetectedString(null); setCents(0); setConfidence(0); silenceTimeoutRef.current = null;
         }, 800);
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -581,6 +583,29 @@ export default function TunerScreen() {
               isInTune={isInTune}
             />
           </View>
+
+          {/* ===== CONFIDENCE BAR ===== */}
+          {isListening && (
+            <View style={styles.confidenceWrap}>
+              <View style={styles.confidenceTrack}>
+                <View
+                  style={[
+                    styles.confidenceFill,
+                    {
+                      width: `${Math.round(confidence * 100)}%` as any,
+                      backgroundColor: isInTune ? ACCENT
+                        : confidence > 0.6 ? ACCENT_BRIGHT
+                        : confidence > 0.3 ? ORANGE
+                        : "rgba(255,255,255,0.15)",
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.confidenceLabel}>
+                {Math.round(confidence * 100)}%
+              </Text>
+            </View>
+          )}
 
           {/* ===== STATUS INDICATOR ===== */}
           <View style={styles.statusRow}>
@@ -788,5 +813,32 @@ const styles = StyleSheet.create({
   micBtnActive: {
     backgroundColor: "rgba(255, 68, 68, 0.12)",
     borderColor: "rgba(255, 68, 68, 0.28)",
+  },
+  confidenceWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    marginTop: 8,
+    gap: 8,
+  },
+  confidenceTrack: {
+    flex: 1,
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  confidenceFill: {
+    height: 3,
+    borderRadius: 2,
+  },
+  confidenceLabel: {
+    fontSize: 9,
+    fontWeight: "600" as const,
+    color: TEXT_DIM,
+    letterSpacing: 0.5,
+    width: 26,
+    textAlign: "right" as const,
+    fontVariant: ["tabular-nums"] as any,
   },
 });

@@ -304,6 +304,8 @@ export class FrequencyStabilizer {
   private count: number = 0;
   private silenceCount: number = 0;
 
+  private lastRangeCents: number = Infinity;
+
   private readonly maxHistory: number;
   private readonly stabilityThresholdCents: number;
   private readonly minReadings: number;
@@ -381,6 +383,7 @@ export class FrequencyStabilizer {
 
     // Stability gate: reject reading if range exceeds threshold
     const rangeCents = 1200 * (Math.log(this.sortBuf[n - 1] / this.sortBuf[0]) / LOG2);
+    this.lastRangeCents = rangeCents;
     if (rangeCents > this.stabilityThresholdCents) return null;
 
     // Median (no new array needed — sortBuf already sorted)
@@ -390,9 +393,22 @@ export class FrequencyStabilizer {
       : this.sortBuf[mid];
   }
 
+  // GDOP-inspired confidence: 0.0 (no signal) → 1.0 (perfect lock)
+  // fillRatio: how many of the 6 history slots are used
+  // stabilityRatio: how tight the readings cluster (cents spread → 0 = locked)
+  getConfidence(): number {
+    if (this.count < this.minReadings) return 0;
+    const fillRatio      = this.count / this.maxHistory;
+    const stabilityRatio = this.lastRangeCents === Infinity
+      ? 0
+      : Math.max(0, 1 - this.lastRangeCents / this.stabilityThresholdCents);
+    return fillRatio * stabilityRatio;
+  }
+
   reset() {
-    this.count        = 0;
-    this.head         = 0;
-    this.silenceCount = 0;
+    this.count          = 0;
+    this.head           = 0;
+    this.silenceCount   = 0;
+    this.lastRangeCents = Infinity;
   }
 }
