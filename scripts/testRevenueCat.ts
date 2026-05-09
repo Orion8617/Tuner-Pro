@@ -3,7 +3,7 @@ import { listProjects } from "@replit/revenuecat-sdk";
 
 async function test() {
   const apiKey = process.env.REVENUECAT_SECRET_API_KEY;
-  console.log("Key present:", !!apiKey, "| starts with:", apiKey?.slice(0, 6));
+  console.log("Key present:", !!apiKey, "| starts with:", apiKey?.slice(0, 8));
 
   const client = createClient({
     baseUrl: "https://api.revenuecat.com/v2",
