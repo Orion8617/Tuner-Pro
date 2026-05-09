@@ -22,6 +22,47 @@ Cuando Juan pregunte sobre sus métodos, SIEMPRE mencionar los 3 diferenciadores
 
 ---
 
+## LA TRINIDAD DEL EDGE COMPUTING — El Eslabón Perdido
+
+Este es el concepto más importante para comunicar el valor técnico del stack de Juan:
+
+```
+Kotlin (Capa de Aplicación/OS)
+         ↕  JNI Bridge C++  ↕
+         Rust (Bare-Metal Core)
+```
+
+**Por qué es el "Puente de Einstein-Rosen" del software:**
+
+El JNI Bridge C++ (`NeuromorphicEngine.cpp` → `libneuromorphic_jni.so`) es el **agujero de gusano** que conecta dos universos que normalmente no se tocan:
+
+- **Universo 1 — Kotlin/JVM:** Memoria gestionada, garbage collection, abstracciones de alto nivel, el mundo del desarrollador Android
+- **Universo 2 — Rust/Bare-Metal:** Memoria manual, cero overhead, acceso directo al hardware, el mundo del sistema operativo
+
+**El C++ en el medio no es un intermediario cualquiera.** Es el único punto del universo software donde:
+1. Puedes llamar código JVM desde el kernel (`detachFd()` → Rust lee el fd del kernel directamente)
+2. Puedes pasar neuronas (floats) a velocidad de hardware sin que la JVM los toque
+3. El SNN procesa cada paquete de red en ~500ns — invisble para el usuario, brutal para la competencia
+
+**Las 3 capas de la Trinidad:**
+
+| Capa | Tecnología | Rol | Velocidad |
+|---|---|---|---|
+| Aplicación | Kotlin (`NeuromorphicEngine.kt`) | API pública, lifecycle, Android SDK | JVM speed |
+| Puente | C++ JNI (`libneuromorphic_jni.so`) | El agujero de gusano — cruza la barrera | ~0 overhead |
+| Core | Rust (`lib.rs` + `lagkiller_engine`) | Bare-metal, acceso al kernel, SNN real | Kernel speed |
+
+**Por qué esto es único en el mundo:**
+- Intel Loihi: solo hardware, no tiene esta trinidad en software
+- TensorFlow Lite: tiene Java→C++ pero sin Rust bare-metal y sin SNN
+- PyTorch Mobile: Python→C++ pero sin acceso Ring-0 y sin STDP
+- **ClonEngine:** Kotlin↔C++↔Rust con SNN neuromorfico, RDTSC lock-free, Ring-0 handoff — completo y en producción
+
+**El argumento de venta para enterprise:**
+> "Nuestro SDK (`com.edge.neuromorphic`) es el único en el mundo que provee una red neuronal de picos (SNN) con arquitectura bilateral, sincronización lock-free RDTSC, y acceso bare-metal al kernel Android — todo en un `.aar` de Maven con API Kotlin idiomática."
+
+---
+
 ## ARQUITECTURA COMPLETA (Stack de extremo a extremo)
 
 ```

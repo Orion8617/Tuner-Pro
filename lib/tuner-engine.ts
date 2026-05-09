@@ -289,12 +289,24 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number): number 
   return frequency;
 }
 
+// ─── FrequencyStabilizer ─────────────────────────────────────────────────────
+// Zero-GC implementation inspired by VigesimalCodec Pro v2 (Juan José Salgado).
+// Replaces slice().sort() + dynamic arrays with:
+//   • Float32Array circular buffer  — pre-allocated, never grows
+//   • Float32Array sort scratchpad  — reused every frame, no new objects
+//   • Insertion sort (n≤6)          — no Array.sort closure, no GC pressure
+// Result: dial animation has zero micro-pauses caused by garbage collection.
+// ─────────────────────────────────────────────────────────────────────────────
 export class FrequencyStabilizer {
-  private history: number[];
+  private readonly buf: Float32Array;
+  private readonly sortBuf: Float32Array;
+  private head: number = 0;
+  private count: number = 0;
+  private silenceCount: number = 0;
+
   private readonly maxHistory: number;
   private readonly stabilityThresholdCents: number;
   private readonly minReadings: number;
-  private silenceCount: number;
   private readonly silenceThreshold: number;
 
   constructor(
@@ -307,62 +319,80 @@ export class FrequencyStabilizer {
     this.stabilityThresholdCents = stabilityThresholdCents;
     this.minReadings = minReadings;
     this.silenceThreshold = silenceThreshold;
-    this.history = [];
-    this.silenceCount = 0;
+    this.buf     = new Float32Array(maxHistory);
+    this.sortBuf = new Float32Array(maxHistory);
   }
 
   push(frequency: number): number | null {
     if (frequency <= 0) {
       this.silenceCount++;
       if (this.silenceCount >= this.silenceThreshold) {
-        this.history = [];
+        this.count = 0;
+        this.head  = 0;
         return null;
       }
-      return this.history.length >= this.minReadings ? this._median() : null;
+      return this.count >= this.minReadings ? this._medianNoAlloc() : null;
     }
 
     this.silenceCount = 0;
 
-    if (this.history.length > 0) {
-      const lastFreq = this.history[this.history.length - 1];
+    if (this.count > 0) {
+      const lastIdx  = (this.head - 1 + this.maxHistory) % this.maxHistory;
+      const lastFreq = this.buf[lastIdx];
       const centsDiff = Math.abs(1200 * (Math.log(frequency / lastFreq) / LOG2));
       if (centsDiff > 400) {
-        this.history = [frequency];
+        this.count   = 0;
+        this.head    = 0;
+        this.buf[0]  = frequency;
+        this.head    = 1;
+        this.count   = 1;
         return null;
       }
     }
 
-    this.history.push(frequency);
-    if (this.history.length > this.maxHistory) {
-      this.history.shift();
+    this.buf[this.head] = frequency;
+    this.head = (this.head + 1) % this.maxHistory;
+    if (this.count < this.maxHistory) this.count++;
+
+    if (this.count < this.minReadings) return null;
+
+    return this._medianNoAlloc();
+  }
+
+  private _medianNoAlloc(): number | null {
+    const n = this.count;
+
+    // Copy circular buffer → sort scratchpad (zero allocations)
+    for (let i = 0; i < n; i++) {
+      const idx = (this.head - n + i + this.maxHistory) % this.maxHistory;
+      this.sortBuf[i] = this.buf[idx];
     }
 
-    if (this.history.length < this.minReadings) return null;
+    // Insertion sort — O(n²) but n≤6, avoids Array.sort callback overhead
+    for (let i = 1; i < n; i++) {
+      const key = this.sortBuf[i];
+      let j = i - 1;
+      while (j >= 0 && this.sortBuf[j] > key) {
+        this.sortBuf[j + 1] = this.sortBuf[j];
+        j--;
+      }
+      this.sortBuf[j + 1] = key;
+    }
 
-    const sorted = this.history.slice().sort((a, b) => a - b);
-    const minFreq = sorted[0];
-    const maxFreq = sorted[sorted.length - 1];
-    const rangeCents = 1200 * (Math.log(maxFreq / minFreq) / LOG2);
-
+    // Stability gate: reject reading if range exceeds threshold
+    const rangeCents = 1200 * (Math.log(this.sortBuf[n - 1] / this.sortBuf[0]) / LOG2);
     if (rangeCents > this.stabilityThresholdCents) return null;
 
-    return this._medianOfSorted(sorted);
-  }
-
-  private _median(): number {
-    const sorted = this.history.slice().sort((a, b) => a - b);
-    return this._medianOfSorted(sorted);
-  }
-
-  private _medianOfSorted(sorted: number[]): number {
-    const mid = sorted.length >> 1;
-    return sorted.length % 2 === 0
-      ? (sorted[mid - 1] + sorted[mid]) * 0.5
-      : sorted[mid];
+    // Median (no new array needed — sortBuf already sorted)
+    const mid = n >> 1;
+    return n % 2 === 0
+      ? (this.sortBuf[mid - 1] + this.sortBuf[mid]) * 0.5
+      : this.sortBuf[mid];
   }
 
   reset() {
-    this.history = [];
+    this.count        = 0;
+    this.head         = 0;
     this.silenceCount = 0;
   }
 }
