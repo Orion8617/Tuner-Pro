@@ -245,10 +245,13 @@ export default function PitchDetectorBridge({
     <View style={{ width: 0, height: 0, overflow: "hidden", position: "absolute" }} pointerEvents="none">
       <WebView
         ref={webViewRef}
-        source={{ html: PITCH_DETECTOR_HTML }}
+        source={{ html: PITCH_DETECTOR_HTML, baseUrl: "https://localhost" }}
         originWhitelist={["*"]}
         onMessage={handleMessage}
         javaScriptEnabled={true}
+        domStorageEnabled={true}
+        allowFileAccessFromFileURLs={true}
+        allowUniversalAccessFromFileURLs={true}
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         mediaCapturePermissionGrantType="grant"
