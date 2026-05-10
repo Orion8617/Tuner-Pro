@@ -401,6 +401,44 @@ export function getTuningStatus(cents: number): "flat" | "sharp" | "in_tune" {
   return "in_tune";
 }
 
+export function quantizeToVigesimalLevel(
+  value: number,
+  min: number,
+  max: number
+): number {
+  if (!Number.isFinite(value) || max <= min) return 0;
+  const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)));
+  return Math.max(0, Math.min(19, Math.floor(normalized * 20)));
+}
+
+export function levelToMayaGlyph(level: number): string {
+  const normalizedLevel = Math.max(0, Math.min(19, Math.round(level)));
+  if (normalizedLevel === 0) return "◎";
+  const bars = Math.floor(normalizedLevel / 5);
+  const dots = normalizedLevel % 5;
+  return `${"━".repeat(bars)}${bars > 0 && dots > 0 ? " " : ""}${"•".repeat(dots)}`;
+}
+
+export function getMayaPitchSignature(cents: number, confidence: number): {
+  pitchLevel: number;
+  confidenceLevel: number;
+  pitchGlyph: string;
+  confidenceGlyph: string;
+  signature: string;
+} {
+  const pitchLevel = quantizeToVigesimalLevel(cents, -50, 50);
+  const confidenceLevel = quantizeToVigesimalLevel(confidence, 0, 1);
+  const pitchGlyph = levelToMayaGlyph(pitchLevel);
+  const confidenceGlyph = levelToMayaGlyph(confidenceLevel);
+  return {
+    pitchLevel,
+    confidenceLevel,
+    pitchGlyph,
+    confidenceGlyph,
+    signature: `${pitchGlyph} ┃ ${confidenceGlyph}`,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  ClonEngine SWARM v5 — Motor de Detección de Pitch
 //  Juan José Salgado Fuentes · KlonEngine Architecture

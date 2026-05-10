@@ -47,6 +47,7 @@ import {
   getInstrumentFreqRange,
   scaleStringsToReference,
   computeNEATAudio,
+  getMayaPitchSignature,
 } from "@/lib/tuner-engine";
 
 const RSTDP_WEIGHTS_KEY = "rstdp_weights_v1";
@@ -552,6 +553,12 @@ export default function TunerScreen() {
   const centsDisplay = isDetecting
     ? `${String(Math.abs(centsQ20)).padStart(3, "0")}.0`
     : "000.0";
+  const mayaSignature = getMayaPitchSignature(cents, confidence);
+  const confidenceState = confidence > 0.75
+    ? t("tuner.signalLocked")
+    : confidence > 0.35
+    ? t("tuner.signalSearching")
+    : t("tuner.signalUnstable");
 
   const sortedScaledStrings = [...scaledStrings].sort((a, b) => a.stringNumber - b.stringNumber);
 
@@ -693,6 +700,33 @@ export default function TunerScreen() {
                 <Text style={styles.confidenceLabel}>
                   {Math.round(confidence * 100)}%
                 </Text>
+              </View>
+
+              <View style={styles.telemetryRow}>
+                <View style={styles.mayaRow}>
+                  <Text style={styles.mayaTag}>{t("tuner.mayaQ20")}</Text>
+                  <Text style={styles.mayaGlyph}>
+                    {isDetecting ? mayaSignature.signature : "◎ ┃ ◎"}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.signalStatePill,
+                    {
+                      borderColor: isDetecting ? statusColor + "30" : "rgba(255,255,255,0.08)",
+                      backgroundColor: isDetecting ? statusColor + "14" : "rgba(255,255,255,0.04)",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.signalStateText,
+                      { color: isDetecting ? statusColor : TEXT_MED },
+                    ]}
+                  >
+                    {confidenceState}
+                  </Text>
+                </View>
               </View>
 
               {Platform.OS === "web" && neatAudio >= 0 && (
@@ -1090,6 +1124,45 @@ const styles = StyleSheet.create({
     width: 26,
     textAlign: "right" as const,
     fontVariant: ["tabular-nums"] as any,
+  },
+  telemetryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  mayaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  mayaTag: {
+    fontSize: 8,
+    fontWeight: "700" as const,
+    color: "rgba(74, 237, 196, 0.35)",
+    letterSpacing: 0.8,
+    width: 52,
+  },
+  mayaGlyph: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: ACCENT,
+    letterSpacing: 0.3,
+    flex: 1,
+  },
+  signalStatePill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  signalStateText: {
+    fontSize: 8,
+    fontWeight: "700" as const,
+    letterSpacing: 0.8,
+    textTransform: "uppercase" as const,
   },
   neatRow: {
     flexDirection: "row",
