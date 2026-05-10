@@ -40,6 +40,7 @@ import {
   getCentsFromTarget,
   getTuningStatus,
   autoCorrelate,
+  swarmEngine,
   FrequencyStabilizer,
   getInstrumentFreqRange,
   scaleStringsToReference,
@@ -455,7 +456,7 @@ export default function TunerScreen() {
       analyserRef.current.getFloatTimeDomainData(buffer);
       const range = getInstrumentFreqRange(currentTuningRef.current);
       const rawFrequency = autoCorrelate(buffer, audioContext!.sampleRate, range.min, range.max);
-      const stableFrequency = stabilizerRef.current.push(rawFrequency);
+      const stableFrequency = stabilizerRef.current.push(rawFrequency, swarmEngine.getDopamine());
       setConfidence(stabilizerRef.current.getConfidence());
       setNeatAudio(computeNEATAudio(buffer, rawFrequency, stableFrequency));
       if (stableFrequency !== null && stableFrequency >= range.min && stableFrequency <= range.max) {
