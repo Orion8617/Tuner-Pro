@@ -1,0 +1,6 @@
+.git
+.local
+server_dist
+*.log
+.cache
+/tmp

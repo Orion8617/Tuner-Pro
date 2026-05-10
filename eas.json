@@ -16,11 +16,9 @@
     },
     "preview": {
       "distribution": "internal",
+      "credentialsSource": "local",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "NODE_ENV": "production"
       }
     },
     "production": {
