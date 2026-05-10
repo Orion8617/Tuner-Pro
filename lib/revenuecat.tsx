@@ -68,6 +68,7 @@ function useSubscriptionContext() {
   // Convenience: get packages by identifier
   const packages = offeringsQuery.data?.current?.availablePackages ?? [];
   const monthlyPackage = packages.find((p) => p.packageType === "MONTHLY");
+  const quarterlyPackage = packages.find((p) => p.packageType === "THREE_MONTH");
   const annualPackage = packages.find((p) => p.packageType === "ANNUAL");
   const lifetimePackage = packages.find((p) => p.packageType === "LIFETIME");
 
@@ -80,7 +81,7 @@ function useSubscriptionContext() {
     restore: restoreMutation.mutateAsync,
     isPurchasing: purchaseMutation.isPending,
     isRestoring: restoreMutation.isPending,
-    packages: { monthly: monthlyPackage, annual: annualPackage, lifetime: lifetimePackage },
+    packages: { monthly: monthlyPackage, quarterly: quarterlyPackage, annual: annualPackage, lifetime: lifetimePackage },
   };
 }
 

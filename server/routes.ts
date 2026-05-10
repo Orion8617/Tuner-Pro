@@ -99,7 +99,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const userId = req.query.userId;
 
     if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
-    if (!plan || !["monthly", "annual", "lifetime"].includes(plan)) {
+    if (!plan || !["monthly", "quarterly", "annual", "lifetime"].includes(plan)) {
       return res.status(400).json({ error: "Invalid plan" });
     }
 
@@ -109,6 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const monthlyUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_MONTHLY;
+    const quarterlyUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_QUARTERLY;
     const annualUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_ANNUAL;
     const lifetimeUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_LIFETIME;
 
@@ -118,6 +119,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (plan === "lifetime") {
       if (!lifetimeUrl) return res.status(500).json({ error: "Lifetime payment not configured" });
       baseUrl = lifetimeUrl;
+    } else if (plan === "quarterly") {
+      if (!quarterlyUrl) return res.status(500).json({ error: "Quarterly payment not configured" });
+      baseUrl = quarterlyUrl;
     } else {
       baseUrl = plan === "annual" ? annualUrl : monthlyUrl;
     }
@@ -157,9 +161,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case "subscription_created":
       case "subscription_updated": {
         const variantId = String(attrs?.variant_id || "");
+        const quarterlyVariantId = process.env.LEMONSQUEEZY_VARIANT_QUARTERLY || "";
         const annualVariantId = process.env.LEMONSQUEEZY_VARIANT_ANNUAL || "";
         const lifetimeVariantId = process.env.LEMONSQUEEZY_VARIANT_LIFETIME || "";
-        const plan = variantId === lifetimeVariantId ? "lifetime" : variantId === annualVariantId ? "annual" : "monthly";
+        const plan = lifetimeVariantId !== "" && variantId === lifetimeVariantId ? "lifetime"
+          : annualVariantId !== "" && variantId === annualVariantId ? "annual"
+          : quarterlyVariantId !== "" && variantId === quarterlyVariantId ? "quarterly"
+          : "monthly";
 
         const statusMap: Record<string, "active" | "cancelled" | "expired" | "paused"> = {
           active: "active", cancelled: "cancelled", expired: "expired",
@@ -167,7 +175,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
 
         const status = statusMap[attrs?.status] || "active";
-        const renewsAt = attrs?.renews_at || attrs?.ends_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const defaultExpiry = plan === "quarterly"
+          ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const renewsAt = attrs?.renews_at || attrs?.ends_at || defaultExpiry;
 
         await storage.upsertSubscription({ userId, lemonSqueezyId, orderId: String(attrs?.order_id || ""), plan, status, currentPeriodEnd: renewsAt });
         break;

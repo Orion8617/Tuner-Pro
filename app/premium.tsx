@@ -141,7 +141,8 @@ export default function PremiumScreen() {
   const canPayWithPhantom = selectedPlan === "lifetime" || selectedPlan === "quarterly";
 
   const getPackageForPlan = useCallback((plan: Plan) => {
-    if (plan === "monthly" || plan === "quarterly") return packages.monthly;
+    if (plan === "monthly") return packages.monthly;
+    if (plan === "quarterly") return packages.quarterly;
     if (plan === "annual") return packages.annual;
     if (plan === "lifetime") return packages.lifetime;
     return null;
