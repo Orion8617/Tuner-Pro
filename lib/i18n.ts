@@ -6,6 +6,10 @@ const translations = {
     "tuner.playString": "Play a string...",
     "tuner.tapToStart": "Tap to start",
     "tuner.string": "String",
+    "tuner.mayaQ20": "Maya Q20",
+    "tuner.signalLocked": "Locked",
+    "tuner.signalSearching": "Searching",
+    "tuner.signalUnstable": "Unstable",
 
     "noteDisplay.inTune": "In Tune",
     "noteDisplay.flat": "Flat",
@@ -133,6 +137,10 @@ const translations = {
     "tuner.playString": "Toca una cuerda...",
     "tuner.tapToStart": "Toca para comenzar",
     "tuner.string": "Cuerda",
+    "tuner.mayaQ20": "Maya Q20",
+    "tuner.signalLocked": "Bloqueado",
+    "tuner.signalSearching": "Buscando",
+    "tuner.signalUnstable": "Inestable",
 
     "noteDisplay.inTune": "Afinado",
     "noteDisplay.flat": "Bajo",
