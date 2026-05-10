@@ -416,7 +416,10 @@ export function levelToMayaGlyph(level: number): string {
   if (normalizedLevel === 0) return "◎";
   const bars = Math.floor(normalizedLevel / 5);
   const dots = normalizedLevel % 5;
-  return `${"━".repeat(bars)}${bars > 0 && dots > 0 ? " " : ""}${"•".repeat(dots)}`;
+  const barGlyph = "━".repeat(bars);
+  const dotGlyph = "•".repeat(dots);
+  const separator = barGlyph && dotGlyph ? " " : "";
+  return `${barGlyph}${separator}${dotGlyph}`;
 }
 
 export function getMayaPitchSignature(cents: number, confidence: number): {

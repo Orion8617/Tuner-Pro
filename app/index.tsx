@@ -66,6 +66,32 @@ const SURFACE_ELEVATED = "#1C1C1C";
 const TEXT_DIM = "rgba(255, 255, 255, 0.2)";
 const TEXT_MED = "rgba(255, 255, 255, 0.45)";
 const TEXT_BRIGHT = "rgba(255, 255, 255, 0.85)";
+const CONFIDENCE_LOCKED_THRESHOLD = 0.75;
+const CONFIDENCE_SEARCHING_THRESHOLD = 0.35;
+
+function withAlpha(color: string, alpha: number): string {
+  const normalizedAlpha = Math.max(0, Math.min(1, alpha));
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    const normalizedHex = hex.length === 3
+      ? hex.split("").map((char) => char + char).join("")
+      : hex;
+    if (normalizedHex.length === 6) {
+      const r = parseInt(normalizedHex.slice(0, 2), 16);
+      const g = parseInt(normalizedHex.slice(2, 4), 16);
+      const b = parseInt(normalizedHex.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
+    }
+  }
+
+  const rgbaMatch = color.match(/^rgba?\(([^)]+)\)$/);
+  if (rgbaMatch) {
+    const [r = "255", g = "255", b = "255"] = rgbaMatch[1].split(",").map((part) => part.trim());
+    return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
+  }
+
+  return color;
+}
 
 function StringVisual({
   str,
@@ -554,9 +580,9 @@ export default function TunerScreen() {
     ? `${String(Math.abs(centsQ20)).padStart(3, "0")}.0`
     : "000.0";
   const mayaSignature = getMayaPitchSignature(cents, confidence);
-  const confidenceState = confidence > 0.75
+  const confidenceState = confidence > CONFIDENCE_LOCKED_THRESHOLD
     ? t("tuner.signalLocked")
-    : confidence > 0.35
+    : confidence > CONFIDENCE_SEARCHING_THRESHOLD
     ? t("tuner.signalSearching")
     : t("tuner.signalUnstable");
 
@@ -713,8 +739,8 @@ export default function TunerScreen() {
                   style={[
                     styles.signalStatePill,
                     {
-                      borderColor: isDetecting ? statusColor + "30" : "rgba(255,255,255,0.08)",
-                      backgroundColor: isDetecting ? statusColor + "14" : "rgba(255,255,255,0.04)",
+                      borderColor: isDetecting ? withAlpha(statusColor, 0.18) : "rgba(255,255,255,0.08)",
+                      backgroundColor: isDetecting ? withAlpha(statusColor, 0.08) : "rgba(255,255,255,0.04)",
                     },
                   ]}
                 >
