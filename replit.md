@@ -10,6 +10,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- **2026-05-10**: Completed quarterly (3-month) plan end-to-end — added `guitartune_premium_quarterly` RevenueCat product (`P3M`, `$rc_three_month`, $4.99); exposed `packages.quarterly` via `useSubscription`; wired `getPackageForPlan("quarterly")` to the correct package; added `"quarterly"` to `/api/checkout/url` accepted plans (reads `LEMONSQUEEZY_CHECKOUT_URL_QUARTERLY`); webhook now detects `LEMONSQUEEZY_VARIANT_QUARTERLY` and stores `plan = "quarterly"` with a 90-day fallback `renewsAt`.
 - **2026-05-09**: Added professional/multi-instrument support — Bass guitar (4-str, 5-str, Drop D, Drop A), Ukulele (Standard GCEA, Low-G, Baritone), 7-String guitar (Standard, Drop A). Added `instrument` field to `TuningConfig`. Extended `autoCorrelate` to 28Hz minimum for bass detection. Added `getInstrumentFreqRange()` and `scaleStringsToReference()` helpers.
 - **2026-05-09**: Added Reference Pitch A4 selector — cycles through 432/434/436/438/440/442/444/446 Hz. Displayed as compact pill in main screen (glows cyan when non-standard). Affects `frequencyToNote`, `findClosestString`, and all frequency calculations. Critical for studio musicians and classical players.
 - **2026-05-09**: TuningSelector now groups by instrument (Guitar → Bass → Ukulele sections) for clear multi-instrument navigation. Added instrument badge in main screen when non-guitar tuning is active.
@@ -46,15 +47,28 @@ Preferred communication style: Simple, everyday language.
 - Type-safe `t()` function with `TranslationKey` type
 - Falls back to English for unsupported languages
 
+### RevenueCat (`lib/revenuecat.tsx`)
+
+- Wraps the `react-native-purchases` SDK in a React context (`SubscriptionProvider` / `useSubscription`)
+- Selects the correct API key at runtime: sandbox key in `__DEV__` / Expo Go / web; platform-specific production key on iOS/Android
+- Fetches customer info (entitlement `"premium"`) and current offering packages via React Query (stale times: 60 s and 5 min respectively)
+- Exposes four typed package refs: `packages.monthly` (`MONTHLY`), `packages.quarterly` (`THREE_MONTH`), `packages.annual` (`ANNUAL`), `packages.lifetime` (`LIFETIME`)
+- `isSubscribed` is `true` when the `"premium"` entitlement is active
+- Provides `purchase(pkg)` and `restore()` mutations; both refetch customer info on success
+- Required env vars: `EXPO_PUBLIC_REVENUECAT_TEST_API_KEY`, `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`, `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY`
+- Seed script: `scripts/seedRevenueCat.ts` — creates/updates products, packages, offerings, and entitlements in RevenueCat via their REST API
+
 ### Tuner Engine (`lib/tuner-engine.ts`)
 
 - Implements autocorrelation-based pitch detection (`autoCorrelate` function) with confidence validation
-- Supports 10 guitar tunings: Standard + 3 free (Double Drop D, Open C, All Fourths) + 6 premium (Drop D, Open G, DADGAD, Open D, Open E, Drop C)
-- `TuningConfig` interface defines each tuning with id, name, shortName, strings, isPremium, genre
+- Supports 20+ tunings across guitar, bass, and ukulele: Standard + 3 free (Double Drop D, Open C, All Fourths) + 6 premium guitar tunings (Drop D, Open G, DADGAD, Open D, Open E, Drop C) + bass tunings (4-str, 5-str, Drop D, Drop A) + ukulele tunings (GCEA, Low-G, Baritone) + 7-string guitar (Standard, Drop A)
+- `TuningConfig` interface defines each tuning with id, name, shortName, strings, isPremium, genre, and `instrument` (`"guitar" | "bass" | "ukulele" | "other"`)
+- `getInstrumentFreqRange(tuning)` returns per-instrument detection window (bass: 28–350 Hz, ukulele: 180–1400 Hz, guitar/other: 50–600 Hz)
 - `FrequencyStabilizer` class provides noise filtering: median filter over 6 readings, rejects unstable/noisy frequencies, auto-clears after silence
 - RMS threshold at 0.02 and autocorrelation confidence > 0.5 to reject ambient noise
-- Provides `frequencyToNote`, `findClosestString`, `getCentsFromTarget`, and `getTuningStatus` utilities
+- Provides `frequencyToNote`, `findClosestString`, `getCentsFromTarget`, `getTuningStatus`, and `scaleStringsToReference` utilities
 - `findClosestString` accepts optional tuning parameter (defaults to STANDARD_TUNING)
+- Reference pitch A4 selector: 432/434/436/438/440/442/444/446 Hz — scales all target frequencies via `scaleStringsToReference`
 - Haptic feedback (vibration) triggers when within ±5 cents of target frequency
 
 ### Pricing & Payment (LemonSqueezy + Solana Pay)
@@ -73,11 +87,12 @@ Preferred communication style: Simple, everyday language.
 
 ### Pricing & Payment (LemonSqueezy)
 - Monthly: $1.99/month
+- Quarterly (3 months): $4.99 (~$1.66/mo, 17% savings)
 - Annual: $9.99/year (58% savings)
 - Lifetime: $14.99 one-time purchase (forever access)
-- **Payment flow**: User selects plan (monthly/annual/lifetime) → app calls `/api/checkout/url` to get checkout URL with user_id → opens LemonSqueezy checkout in browser → webhook confirms payment → app polls `/api/subscription/status` to verify
+- **Payment flow**: User selects plan (monthly/quarterly/annual/lifetime) → app calls `/api/checkout/url` to get checkout URL with user_id → opens LemonSqueezy checkout in browser → webhook confirms payment → app polls `/api/subscription/status` to verify
 - **Webhook endpoint**: `POST /api/webhooks/lemonsqueezy` — verifies HMAC-SHA256 signature, handles subscription_created, subscription_updated, subscription_cancelled, subscription_expired, subscription_paused, subscription_resumed, order_created (for lifetime) events
-- **Environment variables needed**: `LEMONSQUEEZY_WEBHOOK_SECRET`, `LEMONSQUEEZY_CHECKOUT_URL_MONTHLY`, `LEMONSQUEEZY_CHECKOUT_URL_ANNUAL`, `LEMONSQUEEZY_CHECKOUT_URL_LIFETIME`, `LEMONSQUEEZY_VARIANT_ANNUAL`, `LEMONSQUEEZY_VARIANT_LIFETIME`
+- **Environment variables needed**: `LEMONSQUEEZY_WEBHOOK_SECRET`, `LEMONSQUEEZY_CHECKOUT_URL_MONTHLY`, `LEMONSQUEEZY_CHECKOUT_URL_QUARTERLY`, `LEMONSQUEEZY_CHECKOUT_URL_ANNUAL`, `LEMONSQUEEZY_CHECKOUT_URL_LIFETIME`, `LEMONSQUEEZY_VARIANT_ANNUAL`, `LEMONSQUEEZY_VARIANT_QUARTERLY`, `LEMONSQUEEZY_VARIANT_LIFETIME`
 - **Fallback**: If webhook hasn't arrived after 18s of polling, falls back to manual confirmation dialog
 - Competitive positioning: 78% cheaper than GuitarTuna ($9/month)
 - Premium screen includes comparison table vs competitor apps (ads, price, bloat)
@@ -88,26 +103,35 @@ Preferred communication style: Simple, everyday language.
 - **Current implementation**: Fully client-side using AsyncStorage (no server auth yet)
 - Users are stored locally with SHA-256 hashed passwords (via `expo-crypto`)
 - The auth context (`lib/auth-context.tsx`) manages login, register, logout, and premium upgrade
-- The server has a `users` table schema ready but routes are not yet wired up
+- The server has a `users` table and `DbStorage` CRUD methods ready, but HTTP auth routes are not yet exposed
 
 ### Backend (Express)
 
 - **Location**: `server/` directory
 - **Entry point**: `server/index.ts` — Express server with CORS setup for Replit domains and localhost
-- **Routes**: `server/routes.ts` — Currently empty, ready for API route registration (prefix `/api`)
-- **Storage**: `server/storage.ts` — In-memory storage (`MemStorage`) implementing `IStorage` interface with user CRUD operations
+- **Routes**: `server/routes.ts` — All API routes registered under the `/api` prefix:
+  - `GET /api/subscription/status` — returns active subscription for a user
+  - `GET /api/checkout/url` — returns a LemonSqueezy checkout URL for monthly/quarterly/annual/lifetime plans
+  - `POST /api/webhooks/lemonsqueezy` — HMAC-verified LemonSqueezy webhook handler
+  - `POST /api/checkout/solana/create` — creates a Solana Pay session (quarterly/lifetime, USDC or SOL)
+  - `GET /api/checkout/solana/verify` — polls blockchain for Solana payment confirmation
+  - `GET /api/admin/stats`, `GET /api/admin/subscriptions`, `GET /api/admin/solana-sessions`, `POST /api/admin/grant-premium` — admin endpoints (require `ADMIN_SECRET` header)
+- **Storage**: `server/storage.ts` — `DbStorage` class implementing `IStorage` backed by PostgreSQL via Drizzle ORM; handles users, subscriptions, Solana sessions, and admin stats
 - **Build**: Uses `esbuild` to bundle for production (`server_dist/`)
 - **Static serving**: Serves Expo web build in production, proxies to Metro in development
 - **Landing page**: `server/templates/landing-page.html` — Dark-themed marketing page with competitive comparison, tuning showcase, pricing cards, QR code for Expo Go
 
 ### Database (PostgreSQL + Drizzle ORM)
 
-- **Schema**: `shared/schema.ts` — Single `users` table with `id` (UUID), `username`, `password`
+- **Schema**: `shared/schema.ts` — Three tables:
+  - `users` — `id` (UUID PK), `username` (unique), `password`
+  - `subscriptions` — `id`, `userId`, `lemonSqueezyId` (unique), `orderId`, `plan` (enum: monthly/quarterly/annual/lifetime), `status` (enum: active/cancelled/expired/paused), `currentPeriodEnd`, timestamps
+  - `solana_sessions` — `id`, `userId`, `reference` (unique), `plan`, `token` (usdc/sol), `amountUsdc`, `amountSol`, `status` (pending/confirmed/expired), timestamps
 - **ORM**: Drizzle ORM with `drizzle-zod` for schema validation
 - **Config**: `drizzle.config.ts` — Requires `DATABASE_URL` environment variable
 - **Migrations**: Output to `./migrations` directory
 - **Push command**: `npm run db:push` uses `drizzle-kit push`
-- **Note**: The storage layer currently uses in-memory storage, not the database. The database schema is defined but not yet connected to the storage implementation.
+- **Storage**: `DbStorage` in `server/storage.ts` is the active implementation — fully wired to PostgreSQL
 
 ### Key Design Patterns
 
@@ -123,21 +147,24 @@ Preferred communication style: Simple, everyday language.
 - `server:dev` — Start Express server in development with `tsx`
 - `server:prod` — Run production server from `server_dist/`
 - `db:push` — Push Drizzle schema to PostgreSQL
+- `scripts/seedRevenueCat.ts` — Creates/updates RevenueCat products, packages, offerings, and entitlements via the RevenueCat REST API (run once during setup)
 
 ## External Dependencies
 
-- **PostgreSQL**: Required for user data persistence (via `DATABASE_URL` environment variable). Currently schema-only; in-memory storage is the active implementation.
+- **PostgreSQL**: Required for user data, subscriptions, and Solana session persistence (via `DATABASE_URL` environment variable). `DbStorage` is the active implementation.
+- **RevenueCat**: In-app purchase management for iOS/Android (env vars: `EXPO_PUBLIC_REVENUECAT_TEST_API_KEY`, `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY`, `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY`)
+- **LemonSqueezy**: Web checkout and subscription webhooks (env vars: see LemonSqueezy section above)
+- **Solana / Phantom**: Crypto payment option — Solana Pay URL generation and blockchain polling (env var: `SOLANA_WALLET_ADDRESS`; optional: `SOLANA_RPC_URL`, `SOLANA_QUARTERLY_SOL`, `SOLANA_LIFETIME_SOL`)
 - **Expo ecosystem**: Extensive use of Expo modules (haptics, crypto, secure-store, image, linear-gradient, web-browser, splash-screen, localization)
 - **Replit environment**: Server relies on `REPLIT_DEV_DOMAIN`, `REPLIT_DOMAINS`, and `REPLIT_INTERNAL_APP_DOMAIN` for CORS and URL configuration
 - **Device microphone**: Core functionality requires microphone access for pitch detection (permissions configured in `app.json` for both iOS and Android)
-- **No external APIs or third-party services** are currently integrated beyond the local PostgreSQL database
 
 ## Market Strategy
 
 - **Target markets**: US and Europe (English-speaking users), Mexico (bilingual advantage)
 - **Positioning**: "No ads, no bloat, fair price" — 78% cheaper than competitors (Dunford statement in competitive-analysis report)
 - **ASO keywords**: guitar tuner, no ads, drop d tuner, accurate tuner, open g tuning, guitartuna alternative
-- **Freemium model**: Standard + 3 alternative tunings free, 6 premium tunings for $1.99/mo or $9.99/yr
+- **Freemium model**: Standard + 3 alternative tunings free, 6 premium tunings (+ bass/ukulele/7-string) for $1.99/mo, $4.99/3 mo, $9.99/yr, or $14.99 lifetime
 
 ### Go-To-Market Assets (built March 2026)
 
