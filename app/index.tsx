@@ -278,6 +278,8 @@ export default function TunerScreen() {
   const [tunedStrings, setTunedStrings] = useState<Set<number>>(new Set());
   const [confidence, setConfidence] = useState(0);
   const [neatAudio, setNeatAudio] = useState(-1);
+  const [gabaLevel, setGabaLevel] = useState(0);
+  const [iecScore, setIecScore] = useState(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -481,6 +483,8 @@ export default function TunerScreen() {
       const stableFrequency = stabilizerRef.current.push(rawFrequency, swarmEngine.getDopamine());
       setConfidence(stabilizerRef.current.getConfidence());
       setNeatAudio(computeNEATAudio(buffer, rawFrequency, stableFrequency));
+      setGabaLevel(stabilizerRef.current.getGabaLevel());
+      setIecScore(rstdpEngine.getConvergenceScore());
       if (stableFrequency !== null && stableFrequency >= range.min && stableFrequency <= range.max) {
         if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
         const noteInfo = frequencyToNote(stableFrequency, referenceA4Ref.current);
@@ -782,9 +786,41 @@ export default function TunerScreen() {
               })}
           </View>
 
+          {/* ===== IEC CONVERGENCE + GABA STATUS (KlonEngine R-STDP) ===== */}
+          {isListening && (
+            <View style={styles.iecRow}>
+              <Text style={styles.iecLabel}>IEC</Text>
+              <View style={styles.iecTrack}>
+                <View
+                  style={[
+                    styles.iecFill,
+                    {
+                      width: `${Math.round(iecScore * 100)}%` as any,
+                      backgroundColor:
+                        iecScore > 0.75 ? ACCENT
+                        : iecScore > 0.4 ? ORANGE
+                        : "rgba(255,255,255,0.12)",
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[
+                styles.iecValue,
+                { color: iecScore > 0.75 ? ACCENT : iecScore > 0.4 ? ORANGE : TEXT_DIM },
+              ]}>
+                {Math.round(iecScore * 100)}
+              </Text>
+              {gabaLevel > 0.6 && (
+                <View style={styles.gabaTag}>
+                  <Text style={styles.gabaText}>GABA</Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* ===== KLONENGINE ATTRIBUTION ===== */}
           <View style={styles.attributionRow}>
-            <Text style={styles.attributionText}>KlonEngine · SNN · GDOP · NEAT-Audio</Text>
+            <Text style={styles.attributionText}>KlonEngine · SNN+R-STDP · GDOP · GABA · IEC</Text>
           </View>
 
           {/* ===== STRINGS VISUAL ===== */}
@@ -1098,5 +1134,51 @@ const styles = StyleSheet.create({
     color: "rgba(74, 237, 196, 0.14)",
     letterSpacing: 1.2,
     textTransform: "uppercase" as const,
+  },
+  iecRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    marginTop: 4,
+    gap: 6,
+  },
+  iecLabel: {
+    fontSize: 8,
+    fontWeight: "700" as const,
+    color: "rgba(74, 237, 196, 0.35)",
+    letterSpacing: 0.8,
+    width: 24,
+  },
+  iecTrack: {
+    flex: 1,
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  iecFill: {
+    height: 3,
+    borderRadius: 2,
+  },
+  iecValue: {
+    fontSize: 9,
+    fontWeight: "600" as const,
+    width: 22,
+    textAlign: "right" as const,
+    fontVariant: ["tabular-nums"] as any,
+  },
+  gabaTag: {
+    backgroundColor: "rgba(255, 68, 68, 0.13)",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255, 68, 68, 0.28)",
+  },
+  gabaText: {
+    fontSize: 7,
+    fontWeight: "800" as const,
+    color: RED,
+    letterSpacing: 0.6,
   },
 });

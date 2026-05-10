@@ -711,6 +711,9 @@ export class FrequencyStabilizer {
   private count:             number = 0;
   private silenceCount:      number = 0;
   private lastRangeCents:    number = Infinity;
+  // ── GABA Automodulator — Juan José Salgado Fuentes · KlonEngine ─────────
+  // Inhibición dinámica: sube con ruido/silencio, decae exponencial (homeostasis)
+  private gabaLevel:         number = 0;
 
   private readonly maxHistory:              number;
   private readonly stabilityThresholdCents: number;
@@ -738,9 +741,17 @@ export class FrequencyStabilizer {
    * @param dopamine   nivel dopaminérgico de ClonEngineSWARM [0.1, 1.0]
    */
   push(frequency: number, dopamine = 0.5): number | null {
+    // ── GABA Automodulator (Juan José Salgado Fuentes · KlonEngine) ──────────
+    // Homeostasis: decaimiento exponencial natural hacia reposo cada frame
+    this.gabaLevel *= 0.95;
+
     if (frequency <= 0) {
+      // Silencio → sube GABA para inhibir temblores
+      this.gabaLevel = Math.min(1, this.gabaLevel + 0.1);
       this.silenceCount++;
       if (this.silenceCount >= this.silenceThreshold) {
+        // Homeostasis profunda: drain suave del buffer (no hard reset)
+        for (let i = 0; i < this.maxHistory; i++) this.buf[i] *= 0.8;
         this.count = 0;
         this.head  = 0;
         return null;
@@ -755,20 +766,34 @@ export class FrequencyStabilizer {
       const lastFreq = this.buf[lastIdx];
       const centsDiff = Math.abs(1200 * (Math.log(frequency / lastFreq) / LOG2));
       if (centsDiff > 400) {
+        // Salto caótico → sube GABA fuerte (frecuencia basura)
+        this.gabaLevel = Math.min(1, this.gabaLevel + 0.3);
         this.count = 0;
         this.head  = 0;
       }
     }
 
-    this.buf[this.head]     = frequency;
-    this.weights[this.head] = dopamine;  // peso dopaminérgico del frame
-    this.head = (this.head + 1) % this.maxHistory;
-    if (this.count < this.maxHistory) this.count++;
+    this.gabaLevel = Math.max(0, Math.min(1, this.gabaLevel));
+
+    // ── Compuerta Pascal GABA ─────────────────────────────────────────────────
+    if (this.gabaLevel < 0.6) {
+      // Señal clara: permite escritura en el buffer Pascal
+      this.buf[this.head]     = frequency;
+      this.weights[this.head] = dopamine;
+      this.head = (this.head + 1) % this.maxHistory;
+      if (this.count < this.maxHistory) this.count++;
+    } else {
+      // Inhibición GABA: drena buffer hacia 0 (Homeostasis profunda)
+      for (let i = 0; i < this.maxHistory; i++) this.buf[i] *= 0.8;
+    }
 
     if (this.count < this.minReadings) return null;
 
     return this._weightedMedian();
   }
+
+  /** Nivel actual del Automodulador GABA [0, 1]. >0.6 = inhibición activa */
+  getGabaLevel(): number { return this.gabaLevel; }
 
   private _weightedMedian(): number | null {
     const n = this.count;
@@ -835,6 +860,9 @@ export class FrequencyStabilizer {
   }
 
   reset(): void {
+    // Homeostasis en reset manual: drain suave en lugar de corte brusco
+    for (let i = 0; i < this.maxHistory; i++) this.buf[i] *= 0.5;
+    this.gabaLevel      = 0;
     this.count          = 0;
     this.head           = 0;
     this.silenceCount   = 0;
