@@ -29,6 +29,7 @@ import { t } from "@/lib/i18n";
 import TunerDial from "@/components/TunerDial";
 import TuningSelector from "@/components/TuningSelector";
 import PitchDetectorBridge from "@/components/PitchDetectorBridge";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ALL_TUNINGS,
   TuningConfig,
@@ -39,13 +40,16 @@ import {
   findClosestString,
   getCentsFromTarget,
   getTuningStatus,
-  autoCorrelate,
+  autoCorrelateHybrid,
   swarmEngine,
+  rstdpEngine,
   FrequencyStabilizer,
   getInstrumentFreqRange,
   scaleStringsToReference,
   computeNEATAudio,
 } from "@/lib/tuner-engine";
+
+const RSTDP_WEIGHTS_KEY = "rstdp_weights_v1";
 
 const ACCENT = "#4AEDC4";
 const ACCENT_DIM = "rgba(74, 237, 196, 0.13)";
@@ -445,6 +449,24 @@ export default function TunerScreen() {
 
   useEffect(() => () => { stopListening(); }, []);
 
+  // ── R-STDP weight lifecycle ────────────────────────────────────────────
+  // Carga pesos aprendidos de sesiones anteriores (AsyncStorage)
+  // Sesión 2+ arranca ya especializada en la guitarra del usuario — cero warmup
+  useEffect(() => {
+    AsyncStorage.getItem(RSTDP_WEIGHTS_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const w = JSON.parse(raw) as number[];
+          rstdpEngine.loadWeights(w);
+        } catch {}
+      }
+    });
+    return () => {
+      // Guardar pesos al desmontar (cambio de pantalla / cerrar app)
+      AsyncStorage.setItem(RSTDP_WEIGHTS_KEY, JSON.stringify(rstdpEngine.getWeights()));
+    };
+  }, []);
+
   function detectPitch() {
     const analyser = analyserRef.current;
     const audioContext = audioContextRef.current;
@@ -455,7 +477,7 @@ export default function TunerScreen() {
       if (!analyserRef.current) return;
       analyserRef.current.getFloatTimeDomainData(buffer);
       const range = getInstrumentFreqRange(currentTuningRef.current);
-      const rawFrequency = autoCorrelate(buffer, audioContext!.sampleRate, range.min, range.max);
+      const rawFrequency = autoCorrelateHybrid(buffer, audioContext!.sampleRate, range.min, range.max);
       const stableFrequency = stabilizerRef.current.push(rawFrequency, swarmEngine.getDopamine());
       setConfidence(stabilizerRef.current.getConfidence());
       setNeatAudio(computeNEATAudio(buffer, rawFrequency, stableFrequency));
