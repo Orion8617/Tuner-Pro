@@ -5,6 +5,7 @@ import * as schema from "@shared/schema";
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
+  // Development fallback only — production should always provide DATABASE_URL.
   console.warn("[db] DATABASE_URL is not set. Falling back to in-memory storage.");
 }
 

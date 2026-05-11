@@ -257,7 +257,8 @@ export default function PitchDetectorBridge({
         mediaCapturePermissionGrantType="prompt"
         onPermissionRequest={(request: any) => {
           const resources = Array.isArray(request.resources) ? request.resources : [];
-          const allowed = resources.filter((r: string) => r === AUDIO_CAPTURE_RESOURCE);
+          const normalizedResources = resources.filter((r: unknown): r is string => typeof r === "string");
+          const allowed = normalizedResources.filter((r: string) => r === AUDIO_CAPTURE_RESOURCE);
           if (allowed.length > 0) request.grant(allowed);
           else request.deny();
         }}

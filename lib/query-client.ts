@@ -23,6 +23,11 @@ export function getApiUrl(): string {
     return origin.endsWith("/") ? origin : `${origin}/`;
   }
 
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("API base URL is not configured for production.");
+  }
+
+  console.warn("[query-client] Falling back to localhost API base URL for development.");
   return "http://127.0.0.1:5000/";
 }
 

@@ -406,17 +406,10 @@ function verifyWebhookSignature(rawBody, signature, secret) {
 }
 function getPlanExpiry(plan) {
   if (plan === "lifetime") return (/* @__PURE__ */ new Date("2099-12-31")).toISOString();
-  const days = plan === "annual" ? 365 : plan === "quarterly" ? 90 : 30;
+  const days = plan === "annual" ? 365 : plan === "quarterly" ? 90 : plan === "monthly" ? 30 : 30;
   return new Date(Date.now() + days * 24 * 60 * 60 * 1e3).toISOString();
 }
 async function registerRoutes(app2) {
-  app2.get("/klonos-monitor", (_req, res) => {
-    const ip = _req.ip || "unknown";
-    if (!rateLimit(ip, "klonos-monitor", 30)) {
-      return res.status(429).json({ error: "Too many requests" });
-    }
-    res.sendFile("klonos-monitor.html", { root: "./server/templates" });
-  });
   app2.get("/api/subscription/status", async (req, res) => {
     const userId = req.query.userId;
     if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
