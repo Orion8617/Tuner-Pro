@@ -53,6 +53,19 @@ const PRODUCTS = [
     ],
   },
   {
+    identifier: "guitartune_premium_quarterly",
+    playStoreIdentifier: "guitartune_premium_quarterly:quarterly",
+    displayName: "GuitarTune Premium Quarterly",
+    title: "GuitarTune Pro — 3 Months",
+    duration: "P3M" as const,
+    packageKey: "$rc_three_month",
+    packageName: "3 Months — $4.99",
+    prices: [
+      { amount_micros: 4990000, currency: "USD" },
+      { amount_micros: 4990000, currency: "EUR" },
+    ],
+  },
+  {
     identifier: "guitartune_premium_annual",
     playStoreIdentifier: "guitartune_premium_annual:annual",
     displayName: "GuitarTune Premium Annual",

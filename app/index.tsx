@@ -401,8 +401,21 @@ export default function TunerScreen() {
 
   const handleNativePitch = useCallback((data: { frequency: number; note: string; octave: number; cents: number }) => {
     if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
-    const freq = data.frequency;
+    const rawFreq = data.frequency;
     const range = getInstrumentFreqRange(currentTuningRef.current);
+
+    // ── SwarmEngine + FrequencyStabilizer (same pipeline as web path) ──────
+    swarmEngine.updateDopamineFromFreq(rawFreq);
+    const stableFreq = stabilizerRef.current.push(rawFreq, swarmEngine.getDopamine());
+    setConfidence(stabilizerRef.current.getConfidence());
+    setGabaLevel(stabilizerRef.current.getGabaLevel());
+
+    // Only update display with a range-validated frequency
+    const validStable = stableFreq !== null && stableFreq >= range.min && stableFreq <= range.max;
+    const validRaw = rawFreq >= range.min && rawFreq <= range.max;
+    const freq = validStable ? stableFreq : validRaw ? rawFreq : null;
+    if (freq === null) return;
+
     const scaled = scaleStringsToReference(currentTuningRef.current.strings, referenceA4Ref.current);
     const closest = findClosestString(freq, scaled, range.min, range.max);
     const noteInfo = frequencyToNote(freq, referenceA4Ref.current);
@@ -420,10 +433,13 @@ export default function TunerScreen() {
   }, []);
 
   const handleNativeSilence = useCallback(() => {
+    swarmEngine.updateDopamineFromFreq(-1);
+    stabilizerRef.current.push(-1, swarmEngine.getDopamine());
+    setGabaLevel(stabilizerRef.current.getGabaLevel());
     if (!silenceTimeoutRef.current) {
       silenceTimeoutRef.current = setTimeout(() => {
         setDetectedFrequency(0); setDetectedNote(null); setDetectedOctave(null);
-        setDetectedString(null); setCents(0); silenceTimeoutRef.current = null;
+        setDetectedString(null); setCents(0); setConfidence(0); silenceTimeoutRef.current = null;
       }, 800);
     }
   }, []);

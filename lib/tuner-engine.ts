@@ -637,6 +637,27 @@ export class ClonEngineSWARM {
   /** Último Pascal Harmonic Score — útil para diagnóstico */
   getPascalScore(): number { return this.lastPascalScore; }
 
+  /**
+   * Actualiza el estado dopaminérgico a partir de una frecuencia detectada
+   * externamente (path nativo donde el buffer de audio no está disponible).
+   * Misma lógica de recompensa/castigo y homeostasis Winik que process().
+   * @param freq  frecuencia detectada en Hz, o ≤0 para silencio/error
+   */
+  updateDopamineFromFreq(freq: number): void {
+    this.tick++;
+    // Winik homeostasis — cada 20 ticks, regresión a la media (base-20 Maya)
+    if (this.tick % 20 === 0) {
+      this.dopamine = this.dopamine * 0.85 + 0.10;
+    }
+    if (freq > 0) {
+      // Detección válida → recompensa dopaminérgica
+      this.dopamine = Math.min(1.0, this.dopamine + 0.09);
+    } else {
+      // Silencio o señal inválida → castigo leve
+      this.dopamine = Math.max(0.10, this.dopamine * 0.9995);
+    }
+  }
+
   /** Confianza vigesimal [0.0, 1.0] — escala base-20 */
   getVigesimalConfidence(): number {
     return Math.round(this.dopamine * 20) / 20;

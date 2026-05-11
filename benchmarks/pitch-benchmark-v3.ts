@@ -165,7 +165,12 @@ function algoC(buf: Float32Array, mn: number, mx: number): number {
   if(Math.sqrt(ss/N)<0.01) return -1;
   const tMn=Math.max(1,Math.floor(SR/mx)), tMx=Math.min(N-1,Math.floor(SR/mn));
   const ns=new Float32Array(tMx+1);
-  for(let t=0;t<=tMx;t++){let rxy=0,m=0;const l=N-t;for(let j=0;j<l;j++){rxy+=buf[j]*buf[j+t];m+=buf[j]*buf[j]+buf[j+t]*buf[j+t];}ns[t]=m===0?0:2*rxy/m;}
+  // Prefix sums of buf[j]² — makes denominator m O(1) per lag instead of O(N-lag)
+  // m(t) = sq[N-t] + sq[N] - sq[t]  (sum of buf[j]² for j in [0,N-t) ∪ [t,N))
+  const sq=new Float32Array(N+1);
+  for(let j=0;j<N;j++) sq[j+1]=sq[j]+buf[j]*buf[j];
+  const sqTotal=sq[N];
+  for(let t=0;t<=tMx;t++){let rxy=0;const l=N-t;for(let j=0;j<l;j++)rxy+=buf[j]*buf[j+t];const m=sq[l]+sqTotal-sq[t];ns[t]=m===0?0:2*rxy/m;}
   const pk:number[]=[]; let ri=false;
   for(let t=tMn;t<tMx;t++){if(!ri&&ns[t]>0)ri=true;if(ri&&ns[t]>ns[t-1]&&ns[t]>=ns[t+1])pk.push(t);if(ri&&ns[t]<=0)ri=false;}
   if(pk.length===0) return -1;
@@ -222,10 +227,12 @@ class SWARM {
 
 function gammatone(buf: Float32Array, cf: number): Float32Array {
   const out=new Float32Array(buf.length), b=1-Math.exp(-PI2*cf/SR), phi=PI2*cf/SR;
+  // Precompute constants once per channel — eliminates 2×N Math.cos/sin calls in the hot loop
+  const cosPhi=Math.cos(phi), sinPhi=Math.sin(phi), decay=1-b;
   let re=0,im=0;
   for(let i=0;i<buf.length;i++){
-    re=(1-b)*(re*Math.cos(phi)-im*Math.sin(phi))+b*buf[i];
-    im=(1-b)*(re*Math.sin(phi)+im*Math.cos(phi));
+    re=decay*(re*cosPhi-im*sinPhi)+b*buf[i];
+    im=decay*(re*sinPhi+im*cosPhi); // uses updated re — matches original IIR formulation
     out[i]=Math.sqrt(re*re+im*im);
   }
   return out;

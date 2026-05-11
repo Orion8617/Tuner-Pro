@@ -183,9 +183,15 @@ function algoC(buf: Float32Array, minF: number, maxF: number): number {
   const tMin=Math.max(1,Math.floor(SAMPLE_RATE/maxF));
   const tMax=Math.min(N-1,Math.floor(SAMPLE_RATE/minF));
   const nsdf=new Float32Array(tMax+1);
+  // Prefix sums of buf[j]² — makes denominator m O(1) per lag instead of O(N-lag)
+  // m(tau) = sq[N-tau] + sq[N] - sq[tau]  (sum of buf[j]² for j in [0,N-tau) ∪ [tau,N))
+  const sq=new Float32Array(N+1);
+  for(let j=0;j<N;j++) sq[j+1]=sq[j]+buf[j]*buf[j];
+  const sqTotal=sq[N];
   for(let tau=0;tau<=tMax;tau++){
-    let rxy=0,m=0; const l=N-tau;
-    for(let j=0;j<l;j++){rxy+=buf[j]*buf[j+tau];m+=buf[j]*buf[j]+buf[j+tau]*buf[j+tau];}
+    let rxy=0; const l=N-tau;
+    for(let j=0;j<l;j++) rxy+=buf[j]*buf[j+tau];
+    const m=sq[l]+sqTotal-sq[tau];
     nsdf[tau]=m===0?0:2*rxy/m;
   }
   const peaks:number[]=[]; let rising=false;
@@ -287,10 +293,12 @@ function gammatoneFilter(buf: Float32Array, cf: number, sr: number): Float32Arra
   const out = new Float32Array(buf.length);
   const b = 1 - Math.exp(-TWO_PI * cf / sr);
   const phi = TWO_PI * cf / sr;
+  // Precompute constants once per channel — eliminates 2×N Math.cos/sin calls in the hot loop
+  const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi), decay = 1 - b;
   let re = 0, im = 0;
   for (let i = 0; i < buf.length; i++) {
-    re = (1 - b) * (re * Math.cos(phi) - im * Math.sin(phi)) + b * buf[i];
-    im = (1 - b) * (re * Math.sin(phi) + im * Math.cos(phi));
+    re = decay * (re * cosPhi - im * sinPhi) + b * buf[i];
+    im = decay * (re * sinPhi + im * cosPhi); // uses updated re — matches original IIR formulation
     out[i] = Math.sqrt(re * re + im * im); // rectificación de onda completa
   }
   return out;
