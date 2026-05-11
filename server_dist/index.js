@@ -411,6 +411,10 @@ function getPlanExpiry(plan) {
 }
 async function registerRoutes(app2) {
   app2.get("/klonos-monitor", (_req, res) => {
+    const ip = _req.ip || "unknown";
+    if (!rateLimit(ip, "klonos-monitor", 30)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
     res.sendFile("klonos-monitor.html", { root: "./server/templates" });
   });
   app2.get("/api/subscription/status", async (req, res) => {
@@ -1380,7 +1384,7 @@ function buildFooter(relatedLinks) {
 }
 function competitorPage(c) {
   const title = `GuitarTune vs ${c.name}: Side-by-Side Comparison (2026)`;
-  const desc2 = `Compare GuitarTune vs ${c.name}. Ad-free, $9.99/year, 20+ instrument tunings. See feature matrix, pricing, and why guitarists are switching.`;
+  const desc2 = `Compare GuitarTune vs ${c.name}. Ad-free, $9.99/year, 15 guitar tunings. See feature matrix, pricing, and why guitarists are switching.`;
   const canonical = `${BASE_URL}/vs/${c.slug}`;
   const softwareAppSchema = {
     "@context": "https://schema.org",

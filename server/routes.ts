@@ -70,6 +70,10 @@ function getPlanExpiry(plan: "monthly" | "quarterly" | "annual" | "lifetime"): s
 export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/klonos-monitor", (_req: Request, res: Response) => {
+    const ip = _req.ip || "unknown";
+    if (!rateLimit(ip, "klonos-monitor", 30)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
     res.sendFile("klonos-monitor.html", { root: "./server/templates" });
   });
 

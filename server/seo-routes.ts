@@ -120,7 +120,7 @@ function buildFooter(relatedLinks: { href: string; label: string }[]): string {
 
 function competitorPage(c: Competitor): string {
   const title = `GuitarTune vs ${c.name}: Side-by-Side Comparison (2026)`;
-  const desc = `Compare GuitarTune vs ${c.name}. Ad-free, $9.99/year, 20+ instrument tunings. See feature matrix, pricing, and why guitarists are switching.`;
+  const desc = `Compare GuitarTune vs ${c.name}. Ad-free, $9.99/year, 15 guitar tunings. See feature matrix, pricing, and why guitarists are switching.`;
   const canonical = `${BASE_URL}/vs/${c.slug}`;
 
   const softwareAppSchema = {
