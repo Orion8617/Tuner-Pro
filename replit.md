@@ -146,6 +146,9 @@ Preferred communication style: Simple, everyday language.
 - `expo:dev` — Start Expo dev server (configured for Replit)
 - `server:dev` — Start Express server in development with `tsx`
 - `server:prod` — Run production server from `server_dist/`
+- `android:prebuild` — Generate native Android project locally (non-EAS path)
+- `android:apk` — Build release APK locally via Gradle (`android/app/build/outputs/apk/release`)
+- `android:aab` — Build release AAB locally via Gradle (`android/app/build/outputs/bundle/release`)
 - `db:push` — Push Drizzle schema to PostgreSQL
 - `scripts/seedRevenueCat.ts` — Creates/updates RevenueCat products, packages, offerings, and entitlements via the RevenueCat REST API (run once during setup)
 

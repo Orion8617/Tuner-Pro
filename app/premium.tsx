@@ -128,7 +128,7 @@ function PlanCard({
 
 export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
-  const { user, upgradeToPremium } = useAuth();
+  const { user, upgradeToPremium, checkSubscriptionStatus } = useAuth();
   const { packages, purchase, restore, isPurchasing, isRestoring, isSubscribed } = useSubscription();
   const [selectedPlan, setSelectedPlan] = useState<Plan>("annual");
   const [cryptoToken, setCryptoToken] = useState<CryptoToken>("usdc");
@@ -202,7 +202,8 @@ export default function PremiumScreen() {
   const handleRestore = useCallback(async () => {
     try {
       await restore();
-      if (isSubscribed) {
+      const serverSubscribed = await checkSubscriptionStatus();
+      if (serverSubscribed || isSubscribed) {
         await upgradeToPremium();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.back();
@@ -212,7 +213,7 @@ export default function PremiumScreen() {
     } catch (e) {
       showAlert("", t("premium.error"));
     }
-  }, [restore, isSubscribed, upgradeToPremium]);
+  }, [restore, isSubscribed, upgradeToPremium, checkSubscriptionStatus]);
 
   const handlePhantomPay = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);

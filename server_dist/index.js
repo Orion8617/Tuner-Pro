@@ -1,9 +1,14 @@
+var __defProp = Object.defineProperty;
 var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
   get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
 }) : x)(function(x) {
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 
 // server/index.ts
 import express from "express";
@@ -14,111 +19,374 @@ import crypto from "node:crypto";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 
 // server/storage.ts
+import { eq, and, desc, sql as sql2 } from "drizzle-orm";
+
+// server/db.ts
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+
+// shared/schema.ts
+var schema_exports = {};
+__export(schema_exports, {
+  insertUserSchema: () => insertUserSchema,
+  solanaSessionStatusEnum: () => solanaSessionStatusEnum,
+  solanaSessions: () => solanaSessions,
+  solanaTokenEnum: () => solanaTokenEnum,
+  subscriptionPlanEnum: () => subscriptionPlanEnum,
+  subscriptionStatusEnum: () => subscriptionStatusEnum,
+  subscriptions: () => subscriptions,
+  users: () => users
+});
+import { sql } from "drizzle-orm";
+import { pgTable, text, varchar, timestamp, decimal, pgEnum } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+var users = pgTable("users", {
+  id: varchar("id", { length: 128 }).primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull()
+});
+var insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true
+});
+var subscriptionPlanEnum = pgEnum("subscription_plan", [
+  "monthly",
+  "quarterly",
+  "annual",
+  "lifetime"
+]);
+var subscriptionStatusEnum = pgEnum("subscription_status", [
+  "active",
+  "cancelled",
+  "expired",
+  "paused"
+]);
+var subscriptions = pgTable("subscriptions", {
+  id: varchar("id", { length: 128 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 128 }).notNull(),
+  lemonSqueezyId: varchar("lemon_squeezy_id", { length: 255 }).notNull().unique(),
+  orderId: varchar("order_id", { length: 255 }).notNull().default(""),
+  plan: subscriptionPlanEnum("plan").notNull(),
+  status: subscriptionStatusEnum("status").notNull().default("active"),
+  currentPeriodEnd: timestamp("current_period_end").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`)
+});
+var solanaTokenEnum = pgEnum("solana_token", ["usdc", "sol"]);
+var solanaSessionStatusEnum = pgEnum("solana_session_status", [
+  "pending",
+  "confirmed",
+  "expired"
+]);
+var solanaSessions = pgTable("solana_sessions", {
+  id: varchar("id", { length: 128 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 128 }).notNull(),
+  reference: varchar("reference", { length: 255 }).notNull().unique(),
+  plan: subscriptionPlanEnum("plan").notNull(),
+  token: solanaTokenEnum("token").notNull().default("usdc"),
+  amountUsdc: decimal("amount_usdc", { precision: 10, scale: 4 }).notNull(),
+  amountSol: decimal("amount_sol", { precision: 10, scale: 6 }),
+  status: solanaSessionStatusEnum("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  expiresAt: timestamp("expires_at").notNull()
+});
+
+// server/db.ts
+var connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.warn("[db] DATABASE_URL is not set. Falling back to in-memory storage.");
+}
+var pool = connectionString ? new Pool({
+  connectionString,
+  max: 10,
+  idleTimeoutMillis: 3e4,
+  connectionTimeoutMillis: 5e3
+}) : null;
+var db = pool ? drizzle(pool, { schema: schema_exports }) : null;
+
+// server/storage.ts
 import { randomUUID } from "crypto";
-var MemStorage = class {
-  users;
-  subscriptions;
-  solanaSessions;
-  constructor() {
-    this.users = /* @__PURE__ */ new Map();
-    this.subscriptions = /* @__PURE__ */ new Map();
-    this.solanaSessions = /* @__PURE__ */ new Map();
+function requireDb() {
+  if (!db) {
+    throw new Error("DATABASE_URL is not set. Database-backed storage is unavailable.");
   }
+  return db;
+}
+var DbStorage = class {
   async getUser(id) {
-    return this.users.get(id);
+    const rows = await requireDb().select().from(users).where(eq(users.id, id)).limit(1);
+    return rows[0];
   }
   async getUserByUsername(username) {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username
-    );
+    const rows = await requireDb().select().from(users).where(eq(users.username, username)).limit(1);
+    return rows[0];
   }
   async createUser(insertUser) {
     const id = randomUUID();
-    const user = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const rows = await requireDb().insert(users).values({ ...insertUser, id }).returning();
+    return rows[0];
   }
   async getSubscription(userId) {
-    return Array.from(this.subscriptions.values()).find(
-      (sub) => sub.userId === userId && sub.status === "active"
-    );
+    const rows = await requireDb().select().from(subscriptions).where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, "active"))).limit(1);
+    return rows[0];
   }
   async getSubscriptionByLemonSqueezyId(lsId) {
-    return Array.from(this.subscriptions.values()).find(
-      (sub) => sub.lemonSqueezyId === lsId
-    );
+    const rows = await requireDb().select().from(subscriptions).where(eq(subscriptions.lemonSqueezyId, lsId)).limit(1);
+    return rows[0];
   }
   async upsertSubscription(data) {
+    const now = /* @__PURE__ */ new Date();
+    const periodEnd = new Date(data.currentPeriodEnd);
     const existing = await this.getSubscriptionByLemonSqueezyId(data.lemonSqueezyId);
-    const now = (/* @__PURE__ */ new Date()).toISOString();
     if (existing) {
-      const updated = {
-        ...existing,
-        ...data,
+      const rows2 = await requireDb().update(subscriptions).set({
+        userId: data.userId,
+        orderId: data.orderId,
+        plan: data.plan,
+        status: data.status,
+        currentPeriodEnd: periodEnd,
         updatedAt: now
-      };
-      this.subscriptions.set(existing.id, updated);
-      return updated;
+      }).where(eq(subscriptions.id, existing.id)).returning();
+      return rows2[0];
     }
     const id = randomUUID();
-    const sub = {
-      ...data,
+    const rows = await requireDb().insert(subscriptions).values({
       id,
+      userId: data.userId,
+      lemonSqueezyId: data.lemonSqueezyId,
+      orderId: data.orderId,
+      plan: data.plan,
+      status: data.status,
+      currentPeriodEnd: periodEnd,
       createdAt: now,
       updatedAt: now
-    };
-    this.subscriptions.set(id, sub);
-    return sub;
+    }).returning();
+    return rows[0];
   }
   async updateSubscriptionStatus(lemonSqueezyId, status) {
-    const sub = await this.getSubscriptionByLemonSqueezyId(lemonSqueezyId);
-    if (sub) {
-      sub.status = status;
-      sub.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-      this.subscriptions.set(sub.id, sub);
-    }
+    await requireDb().update(subscriptions).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq(subscriptions.lemonSqueezyId, lemonSqueezyId));
   }
   async createSolanaSession(data) {
     const id = randomUUID();
     const now = /* @__PURE__ */ new Date();
     const expiresAt = new Date(now.getTime() + 30 * 60 * 1e3);
-    const session = {
+    const rows = await requireDb().insert(solanaSessions).values({
       id,
       userId: data.userId,
       reference: data.reference,
       plan: data.plan,
       token: data.token,
-      amountUsdc: data.amountUsdc,
-      amountSol: data.amountSol,
+      amountUsdc: String(data.amountUsdc),
+      amountSol: data.amountSol !== void 0 ? String(data.amountSol) : null,
       status: "pending",
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString()
+      createdAt: now,
+      expiresAt
+    }).returning();
+    return rows[0];
+  }
+  async getSolanaSession(reference) {
+    const rows = await requireDb().select().from(solanaSessions).where(eq(solanaSessions.reference, reference)).limit(1);
+    return rows[0];
+  }
+  async confirmSolanaSession(reference) {
+    await requireDb().update(solanaSessions).set({ status: "confirmed" }).where(eq(solanaSessions.reference, reference));
+  }
+  async getAdminStats() {
+    const rows = await requireDb().select({
+      plan: subscriptions.plan,
+      status: subscriptions.status,
+      count: sql2`cast(count(*) as int)`
+    }).from(subscriptions).groupBy(subscriptions.plan, subscriptions.status);
+    const byPlan = {};
+    let activeTotal = 0;
+    for (const row of rows) {
+      if (row.status === "active") {
+        byPlan[row.plan] = (byPlan[row.plan] ?? 0) + row.count;
+        activeTotal += row.count;
+      }
+    }
+    const MRR_MAP = {
+      monthly: 1.99,
+      quarterly: 4.99 / 3,
+      annual: 9.99 / 12,
+      lifetime: 0
     };
-    this.solanaSessions.set(data.reference, session);
+    const mrr = Object.entries(byPlan).reduce(
+      (sum, [plan, cnt]) => sum + (MRR_MAP[plan] ?? 0) * cnt,
+      0
+    );
+    const solanaRows = await requireDb().select({ count: sql2`cast(count(*) as int)` }).from(solanaSessions).where(eq(solanaSessions.status, "confirmed"));
+    const solanaConfirmed = solanaRows[0]?.count ?? 0;
+    return { activeTotal, byPlan, mrr, solanaConfirmed };
+  }
+  async getRecentSubscriptions(limit) {
+    return requireDb().select().from(subscriptions).orderBy(desc(subscriptions.createdAt)).limit(limit);
+  }
+  async getRecentSolanaSessions(limit) {
+    return requireDb().select().from(solanaSessions).orderBy(desc(solanaSessions.createdAt)).limit(limit);
+  }
+  async grantPremium(userId, plan) {
+    const lsId = `admin-grant-${userId}-${Date.now()}`;
+    const periodEnd = plan === "lifetime" ? (/* @__PURE__ */ new Date("2099-12-31")).toISOString() : plan === "annual" ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3).toISOString() : plan === "quarterly" ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1e3).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString();
+    return this.upsertSubscription({
+      userId,
+      lemonSqueezyId: lsId,
+      orderId: lsId,
+      plan,
+      status: "active",
+      currentPeriodEnd: periodEnd
+    });
+  }
+};
+var MemoryStorage = class {
+  usersById = /* @__PURE__ */ new Map();
+  usersByUsername = /* @__PURE__ */ new Map();
+  subscriptionsByLsId = /* @__PURE__ */ new Map();
+  subscriptionsByUserId = /* @__PURE__ */ new Map();
+  solanaByReference = /* @__PURE__ */ new Map();
+  async getUser(id) {
+    return this.usersById.get(id);
+  }
+  async getUserByUsername(username) {
+    return this.usersByUsername.get(username);
+  }
+  async createUser(insertUser) {
+    const user = {
+      id: randomUUID(),
+      username: insertUser.username,
+      password: insertUser.password
+    };
+    this.usersById.set(user.id, user);
+    this.usersByUsername.set(user.username, user);
+    return user;
+  }
+  async getSubscription(userId) {
+    const sub = this.subscriptionsByUserId.get(userId);
+    if (!sub || sub.status !== "active") return void 0;
+    return sub;
+  }
+  async getSubscriptionByLemonSqueezyId(lsId) {
+    return this.subscriptionsByLsId.get(lsId);
+  }
+  async upsertSubscription(data) {
+    const now = /* @__PURE__ */ new Date();
+    const existing = this.subscriptionsByLsId.get(data.lemonSqueezyId);
+    const next = {
+      id: existing?.id ?? randomUUID(),
+      userId: data.userId,
+      lemonSqueezyId: data.lemonSqueezyId,
+      orderId: data.orderId,
+      plan: data.plan,
+      status: data.status,
+      currentPeriodEnd: new Date(data.currentPeriodEnd),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    this.subscriptionsByLsId.set(next.lemonSqueezyId, next);
+    this.subscriptionsByUserId.set(next.userId, next);
+    return next;
+  }
+  async updateSubscriptionStatus(lemonSqueezyId, status) {
+    const sub = this.subscriptionsByLsId.get(lemonSqueezyId);
+    if (!sub) return;
+    const updated = { ...sub, status, updatedAt: /* @__PURE__ */ new Date() };
+    this.subscriptionsByLsId.set(lemonSqueezyId, updated);
+    this.subscriptionsByUserId.set(updated.userId, updated);
+  }
+  async createSolanaSession(data) {
+    const now = /* @__PURE__ */ new Date();
+    const session = {
+      id: randomUUID(),
+      userId: data.userId,
+      reference: data.reference,
+      plan: data.plan,
+      token: data.token,
+      amountUsdc: String(data.amountUsdc),
+      amountSol: data.amountSol !== void 0 ? String(data.amountSol) : null,
+      status: "pending",
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + 30 * 60 * 1e3)
+    };
+    this.solanaByReference.set(session.reference, session);
     return session;
   }
   async getSolanaSession(reference) {
-    return this.solanaSessions.get(reference);
+    return this.solanaByReference.get(reference);
   }
   async confirmSolanaSession(reference) {
-    const session = this.solanaSessions.get(reference);
-    if (session) {
-      session.status = "confirmed";
-      this.solanaSessions.set(reference, session);
+    const session = this.solanaByReference.get(reference);
+    if (!session) return;
+    this.solanaByReference.set(reference, { ...session, status: "confirmed" });
+  }
+  async getAdminStats() {
+    const byPlan = {};
+    let activeTotal = 0;
+    for (const sub of this.subscriptionsByLsId.values()) {
+      if (sub.status !== "active") continue;
+      byPlan[sub.plan] = (byPlan[sub.plan] ?? 0) + 1;
+      activeTotal += 1;
     }
+    const MRR_MAP = {
+      monthly: 1.99,
+      quarterly: 4.99 / 3,
+      annual: 9.99 / 12,
+      lifetime: 0
+    };
+    const mrr = Object.entries(byPlan).reduce((sum, [plan, count]) => sum + (MRR_MAP[plan] ?? 0) * count, 0);
+    const solanaConfirmed = Array.from(this.solanaByReference.values()).filter((s) => s.status === "confirmed").length;
+    return { activeTotal, byPlan, mrr, solanaConfirmed };
+  }
+  async getRecentSubscriptions(limit) {
+    return Array.from(this.subscriptionsByLsId.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+  }
+  async getRecentSolanaSessions(limit) {
+    return Array.from(this.solanaByReference.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+  }
+  async grantPremium(userId, plan) {
+    const lsId = `admin-grant-${userId}-${Date.now()}`;
+    const periodEnd = plan === "lifetime" ? (/* @__PURE__ */ new Date("2099-12-31")).toISOString() : plan === "annual" ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3).toISOString() : plan === "quarterly" ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1e3).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString();
+    return this.upsertSubscription({
+      userId,
+      lemonSqueezyId: lsId,
+      orderId: lsId,
+      plan,
+      status: "active",
+      currentPeriodEnd: periodEnd
+    });
   }
 };
-var storage = new MemStorage();
+var storage = process.env.DATABASE_URL ? new DbStorage() : new MemoryStorage();
 
 // server/routes.ts
+var USER_ID_REGEX = /^[a-zA-Z0-9_\-]{1,128}$/;
+function isValidUserId(id) {
+  return typeof id === "string" && USER_ID_REGEX.test(id);
+}
+var _rateMap = /* @__PURE__ */ new Map();
+function rateLimit(ip, route, maxPerMinute) {
+  const key = `${ip}:${route}`;
+  const now = Date.now();
+  const entry = _rateMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    _rateMap.set(key, { count: 1, resetAt: now + 6e4 });
+    return true;
+  }
+  entry.count += 1;
+  if (entry.count > maxPerMinute) return false;
+  return true;
+}
 var USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 var PLAN_PRICES = {
   quarterly: { usdc: 4.99, sol: parseFloat(process.env.SOLANA_QUARTERLY_SOL || "0.035") },
   lifetime: { usdc: 14.99, sol: parseFloat(process.env.SOLANA_LIFETIME_SOL || "0.10") }
 };
+var _solanaConnection = null;
 function getSolanaConnection() {
-  const rpc = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
-  return new Connection(rpc, "confirmed");
+  if (!_solanaConnection) {
+    const rpc = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+    _solanaConnection = new Connection(rpc, "confirmed");
+  }
+  return _solanaConnection;
 }
 async function checkSolanaPaymentConfirmed(reference) {
   try {
@@ -138,13 +406,17 @@ function verifyWebhookSignature(rawBody, signature, secret) {
 }
 function getPlanExpiry(plan) {
   if (plan === "lifetime") return (/* @__PURE__ */ new Date("2099-12-31")).toISOString();
-  const days = plan === "quarterly" ? 90 : 30;
+  const days = plan === "annual" ? 365 : plan === "quarterly" ? 90 : plan === "monthly" ? 30 : 30;
   return new Date(Date.now() + days * 24 * 60 * 60 * 1e3).toISOString();
 }
 async function registerRoutes(app2) {
   app2.get("/api/subscription/status", async (req, res) => {
     const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ error: "userId is required" });
+    if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
+    const ip = req.ip || "unknown";
+    if (!rateLimit(ip, "subscription-status", 30)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
     const subscription = await storage.getSubscription(userId);
     if (subscription && subscription.status === "active") {
       return res.json({
@@ -159,8 +431,16 @@ async function registerRoutes(app2) {
   app2.get("/api/checkout/url", (req, res) => {
     const plan = req.query.plan;
     const userId = req.query.userId;
-    if (!plan || !userId) return res.status(400).json({ error: "plan and userId are required" });
+    if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
+    if (!plan || !["monthly", "quarterly", "annual", "lifetime"].includes(plan)) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+    const ip = req.ip || "unknown";
+    if (!rateLimit(ip, "checkout-url", 10)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
     const monthlyUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_MONTHLY;
+    const quarterlyUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_QUARTERLY;
     const annualUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_ANNUAL;
     const lifetimeUrl = process.env.LEMONSQUEEZY_CHECKOUT_URL_LIFETIME;
     if (!monthlyUrl || !annualUrl) return res.status(500).json({ error: "Payment not configured" });
@@ -168,6 +448,9 @@ async function registerRoutes(app2) {
     if (plan === "lifetime") {
       if (!lifetimeUrl) return res.status(500).json({ error: "Lifetime payment not configured" });
       baseUrl = lifetimeUrl;
+    } else if (plan === "quarterly") {
+      if (!quarterlyUrl) return res.status(500).json({ error: "Quarterly payment not configured" });
+      baseUrl = quarterlyUrl;
     } else {
       baseUrl = plan === "annual" ? annualUrl : monthlyUrl;
     }
@@ -198,9 +481,10 @@ async function registerRoutes(app2) {
       case "subscription_created":
       case "subscription_updated": {
         const variantId = String(attrs?.variant_id || "");
+        const quarterlyVariantId = process.env.LEMONSQUEEZY_VARIANT_QUARTERLY || "";
         const annualVariantId = process.env.LEMONSQUEEZY_VARIANT_ANNUAL || "";
         const lifetimeVariantId = process.env.LEMONSQUEEZY_VARIANT_LIFETIME || "";
-        const plan = variantId === lifetimeVariantId ? "lifetime" : variantId === annualVariantId ? "annual" : "monthly";
+        const plan = lifetimeVariantId !== "" && variantId === lifetimeVariantId ? "lifetime" : annualVariantId !== "" && variantId === annualVariantId ? "annual" : quarterlyVariantId !== "" && variantId === quarterlyVariantId ? "quarterly" : "monthly";
         const statusMap = {
           active: "active",
           cancelled: "cancelled",
@@ -211,7 +495,8 @@ async function registerRoutes(app2) {
           unpaid: "expired"
         };
         const status = statusMap[attrs?.status] || "active";
-        const renewsAt = attrs?.renews_at || attrs?.ends_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString();
+        const defaultExpiry = plan === "quarterly" ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1e3).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString();
+        const renewsAt = attrs?.renews_at || attrs?.ends_at || defaultExpiry;
         await storage.upsertSubscription({ userId, lemonSqueezyId, orderId: String(attrs?.order_id || ""), plan, status, currentPeriodEnd: renewsAt });
         break;
       }
@@ -248,8 +533,15 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/checkout/solana/create", async (req, res) => {
     const { userId, plan, token = "usdc" } = req.body;
-    if (!userId || !["quarterly", "lifetime"].includes(plan)) {
+    if (!isValidUserId(userId) || !["quarterly", "lifetime"].includes(plan)) {
       return res.status(400).json({ error: "userId and plan (quarterly|lifetime) required" });
+    }
+    if (!["usdc", "sol"].includes(token)) {
+      return res.status(400).json({ error: "Invalid token type" });
+    }
+    const ip = req.ip || "unknown";
+    if (!rateLimit(ip, "solana-create", 5)) {
+      return res.status(429).json({ error: "Too many requests" });
     }
     const recipientAddress = process.env.SOLANA_WALLET_ADDRESS;
     if (!recipientAddress) return res.status(503).json({ error: "Solana payments not configured" });
@@ -293,7 +585,13 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/checkout/solana/verify", async (req, res) => {
     const { reference, userId } = req.query;
-    if (!reference || !userId) return res.status(400).json({ error: "reference and userId required" });
+    if (!isValidUserId(userId) || !reference || typeof reference !== "string") {
+      return res.status(400).json({ error: "reference and userId required" });
+    }
+    const ip = req.ip || "unknown";
+    if (!rateLimit(ip, "solana-verify", 20)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
     const session = await storage.getSolanaSession(reference);
     if (!session) return res.status(404).json({ error: "Session not found" });
     if (session.userId !== userId) return res.status(403).json({ error: "Forbidden" });
@@ -314,6 +612,120 @@ async function registerRoutes(app2) {
       return res.json({ status: "confirmed" });
     }
     return res.json({ status: "pending" });
+  });
+  app2.post("/api/webhooks/revenuecat", async (req, res) => {
+    const authHeader = req.headers["authorization"];
+    const webhookSecret = process.env.REVENUECAT_SECRET_API_KEY;
+    if (webhookSecret) {
+      const token = authHeader?.replace("Bearer ", "").trim();
+      if (!token || token !== webhookSecret) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+    }
+    const event = req.body;
+    const eventType = event.event?.type || "";
+    const appUserId = event.event?.app_user_id || "";
+    const aliases = event.event?.aliases || [];
+    const userId = appUserId || aliases[0];
+    if (!userId || !isValidUserId(userId)) {
+      return res.status(200).json({ received: true });
+    }
+    const productId = event.event?.product_id || "";
+    const expiresAt = event.event?.expiration_at_ms ? new Date(event.event.expiration_at_ms).toISOString() : null;
+    function rcProductToPlan(pid) {
+      if (pid.includes("annual") || pid.includes("yearly")) return "annual";
+      if (pid.includes("lifetime")) return "lifetime";
+      return "monthly";
+    }
+    const plan = rcProductToPlan(productId);
+    const lsId = `rc-${userId}-${productId}`;
+    const periodEnd = expiresAt || (plan === "lifetime" ? (/* @__PURE__ */ new Date("2099-12-31")).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString());
+    try {
+      switch (eventType) {
+        case "INITIAL_PURCHASE":
+        case "RENEWAL":
+        case "UNCANCELLATION":
+        case "NON_SUBSCRIPTION_PURCHASE":
+          await storage.upsertSubscription({
+            userId,
+            lemonSqueezyId: lsId,
+            orderId: event.event?.transaction_id || lsId,
+            plan,
+            status: "active",
+            currentPeriodEnd: periodEnd
+          });
+          console.log(`[RC Webhook] ${eventType} \u2192 user=${userId} plan=${plan}`);
+          break;
+        case "CANCELLATION":
+          await storage.updateSubscriptionStatus(lsId, "cancelled");
+          console.log(`[RC Webhook] CANCELLATION \u2192 user=${userId}`);
+          break;
+        case "EXPIRATION":
+          await storage.updateSubscriptionStatus(lsId, "expired");
+          console.log(`[RC Webhook] EXPIRATION \u2192 user=${userId}`);
+          break;
+        case "BILLING_ISSUE":
+          console.warn(`[RC Webhook] BILLING_ISSUE \u2192 user=${userId}`);
+          break;
+        default:
+          break;
+      }
+    } catch (err) {
+      console.error("[RC Webhook] Error processing event:", err);
+      return res.status(500).json({ error: "Internal error" });
+    }
+    return res.status(200).json({ received: true });
+  });
+  function constantTimeEqual(a, b) {
+    const aBuf = Buffer.from(a);
+    const bBuf = Buffer.from(b);
+    if (aBuf.length !== bBuf.length) return false;
+    return crypto.timingSafeEqual(aBuf, bBuf);
+  }
+  function requireAdmin(req, res) {
+    const configuredSecret = process.env.ADMIN_SECRET;
+    if (!configuredSecret) {
+      res.status(503).json({ error: "Admin access not configured" });
+      return false;
+    }
+    const headerSecret = req.headers["x-admin-secret"];
+    const bearer = req.headers["authorization"]?.replace(/^Bearer\s+/i, "").trim();
+    const providedSecret = headerSecret?.trim() || bearer;
+    if (!providedSecret || !constantTimeEqual(providedSecret, configuredSecret)) {
+      res.status(401).json({ error: "Unauthorized" });
+      return false;
+    }
+    return true;
+  }
+  app2.get("/api/admin/dashboard", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const [stats, recentSubs, recentSolana] = await Promise.all([
+        storage.getAdminStats(),
+        storage.getRecentSubscriptions(20),
+        storage.getRecentSolanaSessions(20)
+      ]);
+      return res.json({ stats, recentSubs, recentSolana });
+    } catch (err) {
+      console.error("[Admin] dashboard error:", err);
+      return res.status(500).json({ error: "Internal error" });
+    }
+  });
+  app2.post("/api/admin/grant-premium", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const { userId, plan } = req.body;
+    if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
+    if (!["monthly", "quarterly", "annual", "lifetime"].includes(plan)) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+    try {
+      const sub = await storage.grantPremium(userId, plan);
+      console.log(`[Admin] Granted ${plan} premium to user ${userId}`);
+      return res.json({ success: true, subscription: sub });
+    } catch (err) {
+      console.error("[Admin] grant-premium error:", err);
+      return res.status(500).json({ error: "Internal error" });
+    }
   });
   const httpServer = createServer(app2);
   return httpServer;
@@ -371,12 +783,12 @@ var COMPETITORS = [
     tuningCount: "10",
     bilingual: false,
     description: "Boss Tuner is the official app from Boss (Roland Corporation), a legendary name in guitar effects pedals. It's targeted at experienced musicians and offers a clean, pedal-style UI. It's a paid-only app (one-time purchase) with no free tier, which means zero ads \u2014 but also zero trial.",
-    mainComplaint: "No free tier \u2014 requires upfront payment with no trial. English-only. Limited to 10 tunings. No ongoing development updates. The UI mimics hardware pedals but can feel dated.",
+    mainComplaint: "No free tier \u2014 requires upfront payment with no trial. English-only. Limited tuning selection. No ongoing development updates. The UI mimics hardware pedals but can feel dated.",
     gtAdvantage: "GuitarTune has a fully functional free tier (no payment required to start), bilingual EN/ES, tuning history, and custom themes in Pro. The $9.99/year Pro is also cheaper than Boss Tuner's $29.99 one-time fee in value terms over 3+ years.",
     faqs: [
       { q: "Is Boss Tuner free?", a: "No. Boss Tuner requires a one-time purchase (approximately $29.99) with no free tier. GuitarTune is free to download with a fully functional ad-free tuner, no payment required." },
       { q: "Boss Tuner vs GuitarTune \u2014 which is better?", a: "Both are ad-free tuners. GuitarTune is free to start, has more tunings, is bilingual, and offers tuning history. Boss Tuner has a strong hardware-inspired UI and Boss brand credibility. For value, GuitarTune wins." },
-      { q: "Does Boss Tuner work for alternate tunings?", a: "Boss Tuner supports 10 tunings. GuitarTune supports the same 10 core tunings, adds Drop D and DADGAD in Pro, plus tuning history and custom themes." }
+      { q: "Does Boss Tuner work for alternate tunings?", a: "Boss Tuner supports a limited set of tunings. GuitarTune supports 15 tunings including Drop D, DADGAD, Open G, and Nashville in Pro, plus tuning history and custom themes." }
     ]
   },
   {
@@ -428,10 +840,10 @@ var COMPETITORS = [
     bilingual: true,
     description: "GuitarTuna Pro is the paid tier of GuitarTuna that removes ads and unlocks the full tuning library. While it delivers a genuinely good product, the price ($47.99/year) is the primary friction point \u2014 more than 4x the cost of GuitarTune Pro.",
     mainComplaint: "High price point. At $47.99/year, GuitarTuna Pro is one of the most expensive tuner subscriptions available, competing unfavorably against GuitarTune's $9.99/year for core functionality.",
-    gtAdvantage: "GuitarTune Pro at $9.99/year delivers the same core accuracy, 10 tunings, tuning history, and bilingual support at 79% of the price savings. For players who only need guitar tuning (not the full GuitarTuna ecosystem), GuitarTune Pro is the smarter value.",
+    gtAdvantage: "GuitarTune Pro at $9.99/year delivers the same core accuracy, 15 tunings, tuning history, and bilingual support at 79% of the price savings. For players who only need guitar tuning (not the full GuitarTuna ecosystem), GuitarTune Pro is the smarter value.",
     faqs: [
       { q: "Is GuitarTuna Pro worth it?", a: "GuitarTuna Pro removes ads and unlocks 50+ tunings for $47.99/year. If you need a large tuning library or use other GuitarTuna features, it may be worth it. If you just need accurate guitar tuning with alternate tunings, GuitarTune Pro ($9.99/year) delivers the same core value at 79% less." },
-      { q: "What does GuitarTuna Pro include?", a: "GuitarTuna Pro includes ad-free tuning, 50+ tunings, a chord library, and scale trainer. GuitarTune Pro ($9.99/yr) includes ad-free tuning, 10 guitar-specific tunings, tuning history, and custom themes \u2014 focused purely on the tuning experience." }
+      { q: "What does GuitarTuna Pro include?", a: "GuitarTuna Pro includes ad-free tuning, 50+ tunings, a chord library, and scale trainer. GuitarTune Pro ($9.99/yr) includes ad-free tuning, 15 guitar-specific tunings, tuning history, and custom themes \u2014 focused purely on the tuning experience." }
     ]
   },
   {
@@ -965,7 +1377,7 @@ function buildFooter(relatedLinks) {
 }
 function competitorPage(c) {
   const title = `GuitarTune vs ${c.name}: Side-by-Side Comparison (2026)`;
-  const desc = `Compare GuitarTune vs ${c.name}. Ad-free, $9.99/year, 10 guitar tunings. See feature matrix, pricing, and why guitarists are switching.`;
+  const desc2 = `Compare GuitarTune vs ${c.name}. Ad-free, $9.99/year, 15 guitar tunings. See feature matrix, pricing, and why guitarists are switching.`;
   const canonical = `${BASE_URL}/vs/${c.slug}`;
   const softwareAppSchema = {
     "@context": "https://schema.org",
@@ -984,7 +1396,7 @@ function competitorPage(c) {
       "ratingValue": "4.8",
       "ratingCount": "124"
     },
-    "description": `GuitarTune is a free, ad-free guitar tuner app with 10 tunings, bilingual support, and Pro from $9.99/year.`
+    "description": `GuitarTune is a free, ad-free guitar tuner app with 15 tunings, bilingual support, and Pro from $9.99/year.`
   };
   const faqSchema = {
     "@context": "https://schema.org",
@@ -1003,7 +1415,7 @@ function competitorPage(c) {
   const relatedTunings = TUNINGS.slice(0, 4);
   const adsFreeStr = c.freeAds ? '<span class="bad">\u2717 Ads in free tier</span>' : '<span class="good">\u2713 Ad-free</span>';
   const bilingualStr = c.bilingual ? '<span class="good">\u2713</span>' : '<span class="bad">\u2717 English only</span>';
-  return `${buildHead(title, desc, canonical, combinedSchema)}
+  return `${buildHead(title, desc2, canonical, combinedSchema)}
 <body>
 ${buildNav(`/vs/${c.slug}`)}
 <div class="wrap">
@@ -1011,7 +1423,7 @@ ${buildNav(`/vs/${c.slug}`)}
   <section class="hero" style="text-align:left;padding-top:48px">
     <div class="tag">Head-to-Head Comparison</div>
     <h1>GuitarTune vs <span>${htmlEscape(c.name)}</span></h1>
-    <p class="sub" style="margin-left:0;text-align:left">${desc}</p>
+    <p class="sub" style="margin-left:0;text-align:left">${desc2}</p>
     <a href="/#download" class="hero-cta">Try GuitarTune Free</a>
     <a href="#comparison" class="hero-sec">See comparison \u2193</a>
   </section>
@@ -1046,7 +1458,7 @@ ${buildNav(`/vs/${c.slug}`)}
         </tr>
         <tr>
           <td>Guitar tunings</td>
-          <td class="us-val"><span class="good">10 tunings (3 free)</span></td>
+          <td class="us-val"><span class="good">15 tunings (4 free)</span></td>
           <td>${htmlEscape(c.tuningCount)}</td>
         </tr>
         <tr>
@@ -1126,7 +1538,7 @@ ${buildFooter([
 }
 function tuningPage(t) {
   const title = `How to Tune Guitar to ${t.name} (${t.shorthand}) \u2014 Step-by-Step Guide`;
-  const desc = `Learn how to tune your guitar to ${t.name} (${t.shorthand}). Step-by-step guide with string notes, common songs, and a free guitar tuner app.`;
+  const desc2 = `Learn how to tune your guitar to ${t.name} (${t.shorthand}). Step-by-step guide with string notes, common songs, and a free guitar tuner app.`;
   const canonical = `${BASE_URL}/tunings/${t.slug}`;
   const softwareAppSchema = {
     "@context": "https://schema.org",
@@ -1156,7 +1568,7 @@ function tuningPage(t) {
   const combinedSchema = JSON.stringify([softwareAppSchema, faqSchema], null, 2);
   const relatedTunings = TUNINGS.filter((x) => x.slug !== t.slug).slice(0, 5);
   const relatedCompetitors = COMPETITORS.slice(0, 3);
-  return `${buildHead(title, desc, canonical, combinedSchema)}
+  return `${buildHead(title, desc2, canonical, combinedSchema)}
 <body>
 ${buildNav(`/tunings/${t.slug}`)}
 <div class="wrap">
@@ -1218,7 +1630,7 @@ ${buildNav(`/tunings/${t.slug}`)}
   <div class="wrap">
     <div class="cta-block" style="margin-top:0">
       <h2>Tune to ${htmlEscape(t.name)} with GuitarTune</h2>
-      <p>${t.isPremium ? `Available in GuitarTune Pro \u2014 $9.99/year or $14.99 lifetime. Includes all 10 tunings, tuning history, and custom themes.` : `Free in GuitarTune \u2014 no payment required. Open the app, select ${htmlEscape(t.name)}, and follow the dial.`}</p>
+      <p>${t.isPremium ? `Available in GuitarTune Pro \u2014 $9.99/year or $14.99 lifetime. Includes all 15 tunings, tuning history, and custom themes.` : `Free in GuitarTune \u2014 no payment required. Open the app, select ${htmlEscape(t.name)}, and follow the dial.`}</p>
       <a href="/#download" class="hero-cta">${t.isPremium ? "Get GuitarTune Pro" : "Download Free"}</a>
     </div>
 
@@ -1247,7 +1659,7 @@ ${buildFooter([
 function hubPage(type) {
   if (type === "compare") {
     const title2 = "GuitarTune vs Guitar Tuner Apps \u2014 Full Comparison Guide (2026)";
-    const desc2 = "Compare GuitarTune against GuitarTuna, Fender Tune, Boss Tuner, and more. Feature matrix, pricing, and honest reviews.";
+    const desc3 = "Compare GuitarTune against GuitarTuna, Fender Tune, Boss Tuner, and more. Feature matrix, pricing, and honest reviews.";
     const canonical2 = `${BASE_URL}/compare`;
     const schema2 = JSON.stringify({
       "@context": "https://schema.org",
@@ -1260,7 +1672,7 @@ function hubPage(type) {
         "name": `GuitarTune vs ${c.name}`
       }))
     }, null, 2);
-    return `${buildHead(title2, desc2, canonical2, schema2)}
+    return `${buildHead(title2, desc3, canonical2, schema2)}
 <body>
 ${buildNav("/compare")}
 <div class="wrap">
@@ -1327,7 +1739,7 @@ ${buildFooter([{ href: "/tunings", label: "All Tunings" }, { href: "/", label: "
 </html>`;
   }
   const title = "Guitar Tunings Guide \u2014 Drop D, Open G, DADGAD & More | GuitarTune";
-  const desc = "Complete guide to alternate guitar tunings: Drop D, Open G, DADGAD, Open D, Open E, Drop C, and more. Step-by-step instructions with a free guitar tuner app.";
+  const desc2 = "Complete guide to alternate guitar tunings: Drop D, Open G, DADGAD, Open D, Open E, Drop C, and more. Step-by-step instructions with a free guitar tuner app.";
   const canonical = `${BASE_URL}/tunings`;
   const schema = JSON.stringify({
     "@context": "https://schema.org",
@@ -1340,7 +1752,7 @@ ${buildFooter([{ href: "/tunings", label: "All Tunings" }, { href: "/", label: "
       "name": `How to tune to ${t.name}`
     }))
   }, null, 2);
-  return `${buildHead(title, desc, canonical, schema)}
+  return `${buildHead(title, desc2, canonical, schema)}
 <body>
 ${buildNav("/tunings")}
 <div class="wrap">
@@ -1508,6 +1920,31 @@ import * as fs from "fs";
 import * as path from "path";
 var app = express();
 var log = console.log;
+var staticRateMap = /* @__PURE__ */ new Map();
+function allowStaticRequest(ip, route, maxPerMinute) {
+  const key = `${ip}:${route}`;
+  const now = Date.now();
+  const entry = staticRateMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    staticRateMap.set(key, { count: 1, resetAt: now + 6e4 });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= maxPerMinute;
+}
+function setupSecurityHeaders(app2) {
+  app2.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "microphone=*, camera=(), geolocation=()");
+    if (process.env.NODE_ENV === "production") {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+    next();
+  });
+}
 function setupCors(app2) {
   app2.use((req, res, next) => {
     const origins = /* @__PURE__ */ new Set();
@@ -1520,14 +1957,14 @@ function setupCors(app2) {
       });
     }
     const origin = req.header("origin");
-    const isLocalhost = origin?.startsWith("http://localhost:") || origin?.startsWith("http://127.0.0.1:");
+    const isLocalhost = process.env.NODE_ENV !== "production" && (origin?.startsWith("http://localhost:") || origin?.startsWith("http://127.0.0.1:"));
     if (origin && (origins.has(origin) || isLocalhost)) {
       res.header("Access-Control-Allow-Origin", origin);
       res.header(
         "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS"
+        "GET, POST, OPTIONS"
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type");
+      res.header("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Admin-Secret, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
     if (req.method === "OPTIONS") {
@@ -1634,6 +2071,10 @@ function configureExpoAndLanding(app2) {
     }
     const platform = req.header("expo-platform");
     if (platform && (platform === "ios" || platform === "android")) {
+      const ip = req.ip || "unknown";
+      if (!allowStaticRequest(ip, `manifest-${platform}`, 120)) {
+        return res.status(429).json({ error: "Too many requests" });
+      }
       return serveExpoManifest(platform, res);
     }
     if (req.path === "/") {
@@ -1663,6 +2104,8 @@ function setupErrorHandler(app2) {
   });
 }
 (async () => {
+  app.set("trust proxy", 1);
+  setupSecurityHeaders(app);
   setupCors(app);
   setupBodyParsing(app);
   setupRequestLogging(app);

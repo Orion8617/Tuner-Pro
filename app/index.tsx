@@ -679,19 +679,10 @@ export default function TunerScreen() {
               style={({ pressed }) => [styles.topBtn, pressed && styles.topBtnPressed]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                if (user?.id === "admin-juanjose-klonengine-2025") {
-                  router.push("/admin");
-                } else {
-                  router.push("/premium");
-                }
+                router.push("/premium");
               }}
             >
-              {user?.id === "admin-juanjose-klonengine-2025" ? (
-                <View style={styles.adminChip}>
-                  <Ionicons name="shield-checkmark" size={10} color="#E8C547" />
-                  <Text style={styles.adminChipText}>ADMIN</Text>
-                </View>
-              ) : user?.isPremium ? (
+              {user?.isPremium ? (
                 <View style={styles.proChip}>
                   <Ionicons name="diamond" size={10} color={ACCENT} />
                   <Text style={styles.proChipText}>PRO</Text>
@@ -977,23 +968,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "800" as const,
     color: ACCENT,
-    letterSpacing: 0.5,
-  },
-  adminChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(232,197,71,0.12)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(232,197,71,0.25)",
-  },
-  adminChipText: {
-    fontSize: 9,
-    fontWeight: "800" as const,
-    color: "#E8C547",
     letterSpacing: 0.5,
   },
   dialContainer: {

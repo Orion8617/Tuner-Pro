@@ -61,18 +61,13 @@ function verifyWebhookSignature(rawBody: Buffer, signature: string, secret: stri
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
 }
 
-function getPlanExpiry(plan: "quarterly" | "lifetime"): string {
+function getPlanExpiry(plan: "monthly" | "quarterly" | "annual" | "lifetime"): string {
   if (plan === "lifetime") return new Date("2099-12-31").toISOString();
-  const days = plan === "quarterly" ? 90 : 30;
+  const days = plan === "annual" ? 365 : plan === "quarterly" ? 90 : plan === "monthly" ? 30 : 30;
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-
-  app.get("/klonos-monitor", (_req: Request, res: Response) => {
-    res.sendFile("klonos-monitor.html", { root: "./server/templates" });
-  });
-
   app.get("/api/subscription/status", async (req: Request, res: Response) => {
     const userId = req.query.userId;
     if (!isValidUserId(userId)) return res.status(400).json({ error: "Invalid userId" });
@@ -397,11 +392,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ─── Admin Routes ────────────────────────────────────────────────────────────
-  const ADMIN_ID = "admin-juanjose-klonengine-2025";
+  function constantTimeEqual(a: string, b: string): boolean {
+    const aBuf = Buffer.from(a);
+    const bBuf = Buffer.from(b);
+    if (aBuf.length !== bBuf.length) return false;
+    return crypto.timingSafeEqual(aBuf, bBuf);
+  }
 
   function requireAdmin(req: Request, res: Response): boolean {
-    const adminId = req.headers["x-admin-id"] as string | undefined;
-    if (adminId !== ADMIN_ID) {
+    const configuredSecret = process.env.ADMIN_SECRET;
+    if (!configuredSecret) {
+      res.status(503).json({ error: "Admin access not configured" });
+      return false;
+    }
+
+    const headerSecret = req.headers["x-admin-secret"] as string | undefined;
+    const bearer = (req.headers["authorization"] as string | undefined)?.replace(/^Bearer\s+/i, "").trim();
+    const providedSecret = headerSecret?.trim() || bearer;
+
+    if (!providedSecret || !constantTimeEqual(providedSecret, configuredSecret)) {
       res.status(401).json({ error: "Unauthorized" });
       return false;
     }

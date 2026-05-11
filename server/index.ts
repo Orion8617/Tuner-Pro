@@ -14,6 +14,19 @@ declare module "http" {
   }
 }
 
+const staticRateMap = new Map<string, { count: number; resetAt: number }>();
+function allowStaticRequest(ip: string, route: string, maxPerMinute: number): boolean {
+  const key = `${ip}:${route}`;
+  const now = Date.now();
+  const entry = staticRateMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    staticRateMap.set(key, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= maxPerMinute;
+}
+
 function setupSecurityHeaders(app: express.Application) {
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -37,7 +50,7 @@ function setupCors(app: express.Application) {
     }
 
     if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
+      process.env.REPLIT_DOMAINS.split(",").forEach((d: string) => {
         origins.add(`https://${d.trim()}`);
       });
     }
@@ -56,7 +69,7 @@ function setupCors(app: express.Application) {
         "Access-Control-Allow-Methods",
         "GET, POST, OPTIONS",
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type, X-Signature");
+      res.header("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Admin-Secret, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
 
@@ -199,6 +212,10 @@ function configureExpoAndLanding(app: express.Application) {
 
     const platform = req.header("expo-platform");
     if (platform && (platform === "ios" || platform === "android")) {
+      const ip = req.ip || "unknown";
+      if (!allowStaticRequest(ip, `manifest-${platform}`, 120)) {
+        return res.status(429).json({ error: "Too many requests" });
+      }
       return serveExpoManifest(platform, res);
     }
 
