@@ -1380,7 +1380,7 @@ function buildFooter(relatedLinks) {
 }
 function competitorPage(c) {
   const title = `GuitarTune vs ${c.name}: Side-by-Side Comparison (2026)`;
-  const desc2 = `Compare GuitarTune vs ${c.name}. Ad-free, $9.99/year, 10 guitar tunings. See feature matrix, pricing, and why guitarists are switching.`;
+  const desc2 = `Compare GuitarTune vs ${c.name}. Ad-free, $9.99/year, 20+ instrument tunings. See feature matrix, pricing, and why guitarists are switching.`;
   const canonical = `${BASE_URL}/vs/${c.slug}`;
   const softwareAppSchema = {
     "@context": "https://schema.org",
@@ -1923,6 +1923,18 @@ import * as fs from "fs";
 import * as path from "path";
 var app = express();
 var log = console.log;
+var staticRateMap = /* @__PURE__ */ new Map();
+function allowStaticRequest(ip, route, maxPerMinute) {
+  const key = `${ip}:${route}`;
+  const now = Date.now();
+  const entry = staticRateMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    staticRateMap.set(key, { count: 1, resetAt: now + 6e4 });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= maxPerMinute;
+}
 function setupSecurityHeaders(app2) {
   app2.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -2062,6 +2074,10 @@ function configureExpoAndLanding(app2) {
     }
     const platform = req.header("expo-platform");
     if (platform && (platform === "ios" || platform === "android")) {
+      const ip = req.ip || "unknown";
+      if (!allowStaticRequest(ip, `manifest-${platform}`, 120)) {
+        return res.status(429).json({ error: "Too many requests" });
+      }
       return serveExpoManifest(platform, res);
     }
     if (req.path === "/") {

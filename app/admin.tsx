@@ -110,7 +110,7 @@ export default function AdminScreen() {
 
   const fetchDashboard = useCallback(async () => {
     if (!adminSecret.trim()) {
-      setError("Admin secret requerido");
+      setError("Admin secret required");
       setLoading(false);
       setRefreshing(false);
       return;
