@@ -92,39 +92,46 @@ var solanaSessions = pgTable("solana_sessions", {
 });
 
 // server/db.ts
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set. Database must be provisioned first.");
+var connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.warn("[db] DATABASE_URL is not set. Falling back to in-memory storage.");
 }
-var pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+var pool = connectionString ? new Pool({
+  connectionString,
   max: 10,
   idleTimeoutMillis: 3e4,
   connectionTimeoutMillis: 5e3
-});
-var db = drizzle(pool, { schema: schema_exports });
+}) : null;
+var db = pool ? drizzle(pool, { schema: schema_exports }) : null;
 
 // server/storage.ts
 import { randomUUID } from "crypto";
+function requireDb() {
+  if (!db) {
+    throw new Error("DATABASE_URL is not set. Database-backed storage is unavailable.");
+  }
+  return db;
+}
 var DbStorage = class {
   async getUser(id) {
-    const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    const rows = await requireDb().select().from(users).where(eq(users.id, id)).limit(1);
     return rows[0];
   }
   async getUserByUsername(username) {
-    const rows = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    const rows = await requireDb().select().from(users).where(eq(users.username, username)).limit(1);
     return rows[0];
   }
   async createUser(insertUser) {
     const id = randomUUID();
-    const rows = await db.insert(users).values({ ...insertUser, id }).returning();
+    const rows = await requireDb().insert(users).values({ ...insertUser, id }).returning();
     return rows[0];
   }
   async getSubscription(userId) {
-    const rows = await db.select().from(subscriptions).where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, "active"))).limit(1);
+    const rows = await requireDb().select().from(subscriptions).where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, "active"))).limit(1);
     return rows[0];
   }
   async getSubscriptionByLemonSqueezyId(lsId) {
-    const rows = await db.select().from(subscriptions).where(eq(subscriptions.lemonSqueezyId, lsId)).limit(1);
+    const rows = await requireDb().select().from(subscriptions).where(eq(subscriptions.lemonSqueezyId, lsId)).limit(1);
     return rows[0];
   }
   async upsertSubscription(data) {
@@ -132,7 +139,7 @@ var DbStorage = class {
     const periodEnd = new Date(data.currentPeriodEnd);
     const existing = await this.getSubscriptionByLemonSqueezyId(data.lemonSqueezyId);
     if (existing) {
-      const rows2 = await db.update(subscriptions).set({
+      const rows2 = await requireDb().update(subscriptions).set({
         userId: data.userId,
         orderId: data.orderId,
         plan: data.plan,
@@ -143,7 +150,7 @@ var DbStorage = class {
       return rows2[0];
     }
     const id = randomUUID();
-    const rows = await db.insert(subscriptions).values({
+    const rows = await requireDb().insert(subscriptions).values({
       id,
       userId: data.userId,
       lemonSqueezyId: data.lemonSqueezyId,
@@ -157,13 +164,13 @@ var DbStorage = class {
     return rows[0];
   }
   async updateSubscriptionStatus(lemonSqueezyId, status) {
-    await db.update(subscriptions).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq(subscriptions.lemonSqueezyId, lemonSqueezyId));
+    await requireDb().update(subscriptions).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq(subscriptions.lemonSqueezyId, lemonSqueezyId));
   }
   async createSolanaSession(data) {
     const id = randomUUID();
     const now = /* @__PURE__ */ new Date();
     const expiresAt = new Date(now.getTime() + 30 * 60 * 1e3);
-    const rows = await db.insert(solanaSessions).values({
+    const rows = await requireDb().insert(solanaSessions).values({
       id,
       userId: data.userId,
       reference: data.reference,
@@ -178,14 +185,14 @@ var DbStorage = class {
     return rows[0];
   }
   async getSolanaSession(reference) {
-    const rows = await db.select().from(solanaSessions).where(eq(solanaSessions.reference, reference)).limit(1);
+    const rows = await requireDb().select().from(solanaSessions).where(eq(solanaSessions.reference, reference)).limit(1);
     return rows[0];
   }
   async confirmSolanaSession(reference) {
-    await db.update(solanaSessions).set({ status: "confirmed" }).where(eq(solanaSessions.reference, reference));
+    await requireDb().update(solanaSessions).set({ status: "confirmed" }).where(eq(solanaSessions.reference, reference));
   }
   async getAdminStats() {
-    const rows = await db.select({
+    const rows = await requireDb().select({
       plan: subscriptions.plan,
       status: subscriptions.status,
       count: sql2`cast(count(*) as int)`
@@ -208,15 +215,15 @@ var DbStorage = class {
       (sum, [plan, cnt]) => sum + (MRR_MAP[plan] ?? 0) * cnt,
       0
     );
-    const solanaRows = await db.select({ count: sql2`cast(count(*) as int)` }).from(solanaSessions).where(eq(solanaSessions.status, "confirmed"));
+    const solanaRows = await requireDb().select({ count: sql2`cast(count(*) as int)` }).from(solanaSessions).where(eq(solanaSessions.status, "confirmed"));
     const solanaConfirmed = solanaRows[0]?.count ?? 0;
     return { activeTotal, byPlan, mrr, solanaConfirmed };
   }
   async getRecentSubscriptions(limit) {
-    return db.select().from(subscriptions).orderBy(desc(subscriptions.createdAt)).limit(limit);
+    return requireDb().select().from(subscriptions).orderBy(desc(subscriptions.createdAt)).limit(limit);
   }
   async getRecentSolanaSessions(limit) {
-    return db.select().from(solanaSessions).orderBy(desc(solanaSessions.createdAt)).limit(limit);
+    return requireDb().select().from(solanaSessions).orderBy(desc(solanaSessions.createdAt)).limit(limit);
   }
   async grantPremium(userId, plan) {
     const lsId = `admin-grant-${userId}-${Date.now()}`;
@@ -231,7 +238,124 @@ var DbStorage = class {
     });
   }
 };
-var storage = new DbStorage();
+var MemoryStorage = class {
+  usersById = /* @__PURE__ */ new Map();
+  usersByUsername = /* @__PURE__ */ new Map();
+  subscriptionsByLsId = /* @__PURE__ */ new Map();
+  subscriptionsByUserId = /* @__PURE__ */ new Map();
+  solanaByReference = /* @__PURE__ */ new Map();
+  async getUser(id) {
+    return this.usersById.get(id);
+  }
+  async getUserByUsername(username) {
+    return this.usersByUsername.get(username);
+  }
+  async createUser(insertUser) {
+    const user = {
+      id: randomUUID(),
+      username: insertUser.username,
+      password: insertUser.password
+    };
+    this.usersById.set(user.id, user);
+    this.usersByUsername.set(user.username, user);
+    return user;
+  }
+  async getSubscription(userId) {
+    const sub = this.subscriptionsByUserId.get(userId);
+    if (!sub || sub.status !== "active") return void 0;
+    return sub;
+  }
+  async getSubscriptionByLemonSqueezyId(lsId) {
+    return this.subscriptionsByLsId.get(lsId);
+  }
+  async upsertSubscription(data) {
+    const now = /* @__PURE__ */ new Date();
+    const existing = this.subscriptionsByLsId.get(data.lemonSqueezyId);
+    const next = {
+      id: existing?.id ?? randomUUID(),
+      userId: data.userId,
+      lemonSqueezyId: data.lemonSqueezyId,
+      orderId: data.orderId,
+      plan: data.plan,
+      status: data.status,
+      currentPeriodEnd: new Date(data.currentPeriodEnd),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    this.subscriptionsByLsId.set(next.lemonSqueezyId, next);
+    this.subscriptionsByUserId.set(next.userId, next);
+    return next;
+  }
+  async updateSubscriptionStatus(lemonSqueezyId, status) {
+    const sub = this.subscriptionsByLsId.get(lemonSqueezyId);
+    if (!sub) return;
+    const updated = { ...sub, status, updatedAt: /* @__PURE__ */ new Date() };
+    this.subscriptionsByLsId.set(lemonSqueezyId, updated);
+    this.subscriptionsByUserId.set(updated.userId, updated);
+  }
+  async createSolanaSession(data) {
+    const now = /* @__PURE__ */ new Date();
+    const session = {
+      id: randomUUID(),
+      userId: data.userId,
+      reference: data.reference,
+      plan: data.plan,
+      token: data.token,
+      amountUsdc: String(data.amountUsdc),
+      amountSol: data.amountSol !== void 0 ? String(data.amountSol) : null,
+      status: "pending",
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + 30 * 60 * 1e3)
+    };
+    this.solanaByReference.set(session.reference, session);
+    return session;
+  }
+  async getSolanaSession(reference) {
+    return this.solanaByReference.get(reference);
+  }
+  async confirmSolanaSession(reference) {
+    const session = this.solanaByReference.get(reference);
+    if (!session) return;
+    this.solanaByReference.set(reference, { ...session, status: "confirmed" });
+  }
+  async getAdminStats() {
+    const byPlan = {};
+    let activeTotal = 0;
+    for (const sub of this.subscriptionsByLsId.values()) {
+      if (sub.status !== "active") continue;
+      byPlan[sub.plan] = (byPlan[sub.plan] ?? 0) + 1;
+      activeTotal += 1;
+    }
+    const MRR_MAP = {
+      monthly: 1.99,
+      quarterly: 4.99 / 3,
+      annual: 9.99 / 12,
+      lifetime: 0
+    };
+    const mrr = Object.entries(byPlan).reduce((sum, [plan, count]) => sum + (MRR_MAP[plan] ?? 0) * count, 0);
+    const solanaConfirmed = Array.from(this.solanaByReference.values()).filter((s) => s.status === "confirmed").length;
+    return { activeTotal, byPlan, mrr, solanaConfirmed };
+  }
+  async getRecentSubscriptions(limit) {
+    return Array.from(this.subscriptionsByLsId.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+  }
+  async getRecentSolanaSessions(limit) {
+    return Array.from(this.solanaByReference.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+  }
+  async grantPremium(userId, plan) {
+    const lsId = `admin-grant-${userId}-${Date.now()}`;
+    const periodEnd = plan === "lifetime" ? (/* @__PURE__ */ new Date("2099-12-31")).toISOString() : plan === "annual" ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3).toISOString() : plan === "quarterly" ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1e3).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3).toISOString();
+    return this.upsertSubscription({
+      userId,
+      lemonSqueezyId: lsId,
+      orderId: lsId,
+      plan,
+      status: "active",
+      currentPeriodEnd: periodEnd
+    });
+  }
+};
+var storage = process.env.DATABASE_URL ? new DbStorage() : new MemoryStorage();
 
 // server/routes.ts
 var USER_ID_REGEX = /^[a-zA-Z0-9_\-]{1,128}$/;
@@ -282,7 +406,7 @@ function verifyWebhookSignature(rawBody, signature, secret) {
 }
 function getPlanExpiry(plan) {
   if (plan === "lifetime") return (/* @__PURE__ */ new Date("2099-12-31")).toISOString();
-  const days = plan === "quarterly" ? 90 : 30;
+  const days = plan === "annual" ? 365 : plan === "quarterly" ? 90 : 30;
   return new Date(Date.now() + days * 24 * 60 * 60 * 1e3).toISOString();
 }
 async function registerRoutes(app2) {
@@ -555,10 +679,22 @@ async function registerRoutes(app2) {
     }
     return res.status(200).json({ received: true });
   });
-  const ADMIN_ID = "admin-juanjose-klonengine-2025";
+  function constantTimeEqual(a, b) {
+    const aBuf = Buffer.from(a);
+    const bBuf = Buffer.from(b);
+    if (aBuf.length !== bBuf.length) return false;
+    return crypto.timingSafeEqual(aBuf, bBuf);
+  }
   function requireAdmin(req, res) {
-    const adminId = req.headers["x-admin-id"];
-    if (adminId !== ADMIN_ID) {
+    const configuredSecret = process.env.ADMIN_SECRET;
+    if (!configuredSecret) {
+      res.status(503).json({ error: "Admin access not configured" });
+      return false;
+    }
+    const headerSecret = req.headers["x-admin-secret"];
+    const bearer = req.headers["authorization"]?.replace(/^Bearer\s+/i, "").trim();
+    const providedSecret = headerSecret?.trim() || bearer;
+    if (!providedSecret || !constantTimeEqual(providedSecret, configuredSecret)) {
       res.status(401).json({ error: "Unauthorized" });
       return false;
     }
@@ -1819,7 +1955,7 @@ function setupCors(app2) {
         "Access-Control-Allow-Methods",
         "GET, POST, OPTIONS"
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type, X-Signature");
+      res.header("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Admin-Secret, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
     if (req.method === "OPTIONS") {

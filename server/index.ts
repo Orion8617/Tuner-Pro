@@ -37,7 +37,7 @@ function setupCors(app: express.Application) {
     }
 
     if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
+      process.env.REPLIT_DOMAINS.split(",").forEach((d: string) => {
         origins.add(`https://${d.trim()}`);
       });
     }
@@ -56,7 +56,7 @@ function setupCors(app: express.Application) {
         "Access-Control-Allow-Methods",
         "GET, POST, OPTIONS",
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type, X-Signature");
+      res.header("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Admin-Secret, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
 

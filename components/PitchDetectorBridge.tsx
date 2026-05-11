@@ -250,13 +250,14 @@ export default function PitchDetectorBridge({
         onMessage={handleMessage}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        allowFileAccessFromFileURLs={true}
-        allowUniversalAccessFromFileURLs={true}
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
-        mediaCapturePermissionGrantType="grant"
+        mediaCapturePermissionGrantType="prompt"
         onPermissionRequest={(request: any) => {
-          request.grant(request.resources);
+          const resources = Array.isArray(request.resources) ? request.resources : [];
+          const allowed = resources.filter((r: string) => r === "android.webkit.resource.AUDIO_CAPTURE");
+          if (allowed.length > 0) request.grant(allowed);
+          else request.deny();
         }}
         style={{ width: 1, height: 1, opacity: 0 }}
       />

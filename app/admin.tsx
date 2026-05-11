@@ -9,14 +9,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 
-const ADMIN_ID = "admin-juanjose-klonengine-2025";
 const BG = "#080808";
 const SURFACE = "#111111";
 const SURFACE2 = "#181818";
 const ACCENT = "#4AEDC4";
 const ACCENT_DIM = "rgba(74,237,196,0.12)";
 const GOLD = "#E8C547";
-const GOLD_DIM = "rgba(232,197,71,0.12)";
 const RED = "#FF4444";
 const RED_DIM = "rgba(255,68,68,0.12)";
 const TEXT = "#FFFFFF";
@@ -103,18 +101,25 @@ export default function AdminScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [adminSecret, setAdminSecret] = useState("");
 
   const [grantUserId, setGrantUserId] = useState("");
   const [grantPlan, setGrantPlan] = useState<Plan>("annual");
   const [granting, setGranting] = useState(false);
   const [grantResult, setGrantResult] = useState<string | null>(null);
 
-  async function fetchDashboard() {
+  const fetchDashboard = useCallback(async () => {
+    if (!adminSecret.trim()) {
+      setError("Admin secret requerido");
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const base = getApiUrl();
       const url = new URL("/api/admin/dashboard", base);
       const res = await fetch(url.toString(), {
-        headers: { "x-admin-id": ADMIN_ID },
+        headers: { "x-admin-secret": adminSecret.trim() },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as Dashboard;
@@ -126,14 +131,21 @@ export default function AdminScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, [adminSecret]);
 
-  useEffect(() => { fetchDashboard(); }, []);
+  useEffect(() => {
+    if (!adminSecret.trim()) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetchDashboard();
+  }, [adminSecret, fetchDashboard]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchDashboard();
-  }, []);
+  }, [fetchDashboard]);
 
   async function handleGrant() {
     if (!grantUserId.trim()) {
@@ -149,7 +161,7 @@ export default function AdminScreen() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-id": ADMIN_ID,
+          "x-admin-secret": adminSecret.trim(),
         },
         body: JSON.stringify({ userId: grantUserId.trim(), plan: grantPlan }),
       });
@@ -228,6 +240,20 @@ export default function AdminScreen() {
               value={String(stats?.solanaConfirmed ?? 0)}
               icon="diamond"
               color="#9945FF"
+            />
+          </View>
+
+          <View style={styles.adminAuthBlock}>
+            <Text style={styles.adminAuthLabel}>Admin Secret</Text>
+            <TextInput
+              style={styles.input}
+              value={adminSecret}
+              onChangeText={setAdminSecret}
+              placeholder="Ingresa ADMIN_SECRET"
+              placeholderTextColor={TEXT3}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
             />
           </View>
 
@@ -357,13 +383,6 @@ export default function AdminScreen() {
                 </View>
               )}
 
-              <View style={styles.testBlock}>
-                <Text style={styles.testTitle}>Para test de RevenueCat:</Text>
-                <Text style={styles.testBody}>
-                  Tu userId admin es:{"\n"}
-                  <Text style={styles.testId}>{ADMIN_ID}</Text>
-                </Text>
-              </View>
             </View>
           )}
         </ScrollView>
@@ -518,6 +537,15 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 10, fontWeight: "700" },
   grantSection: { gap: 14 },
+  adminAuthBlock: {
+    backgroundColor: SURFACE,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    gap: 8,
+  },
+  adminAuthLabel: { color: TEXT2, fontSize: 12, fontWeight: "600" },
   grantTitle: { color: TEXT, fontSize: 16, fontWeight: "700" },
   grantSub: { color: TEXT2, fontSize: 12, lineHeight: 18 },
   input: {
@@ -538,12 +566,4 @@ const styles = StyleSheet.create({
   grantBtnText: { color: "#000", fontSize: 15, fontWeight: "700" },
   grantResult: { padding: 12, borderRadius: 10 },
   grantResultText: { fontSize: 13, fontWeight: "600" },
-  testBlock: {
-    backgroundColor: SURFACE, borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: BORDER, gap: 6,
-    marginTop: 8,
-  },
-  testTitle: { color: TEXT2, fontSize: 12, fontWeight: "600" },
-  testBody: { color: TEXT3, fontSize: 11, lineHeight: 18 },
-  testId: { color: ACCENT, fontFamily: "monospace", fontSize: 11 },
 });

@@ -44,37 +44,12 @@ async function hashPassword(password: string, userId: string): Promise<string> {
   return digest;
 }
 
-const ADMIN_USERNAME = "juanjose";
-const ADMIN_DISPLAY = "Juan José";
-const ADMIN_ID = "admin-juanjose-klonengine-2025";
-// Pre-computed hash — password never stored in plaintext in source code.
-// Hash = SHA256("Frontier2021!guitartune_salt_v1_" + ADMIN_ID)
-const ADMIN_HASH = "21780b460cf1de6a9d7d24a28b426dffeb89bc5437cb4ad174b39a3f4a6c72d0";
-
-async function seedAdminUser() {
-  try {
-    const users = await getStoredUsers();
-    if (!users[ADMIN_USERNAME]) {
-      users[ADMIN_USERNAME] = {
-        id: ADMIN_ID,
-        username: ADMIN_DISPLAY,
-        passwordHash: ADMIN_HASH,
-        isPremium: true,
-        createdAt: "2025-01-01T00:00:00.000Z",
-      };
-      await saveUsers(users);
-    }
-  } catch (e) {
-    // Silent — admin seed is best-effort
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    seedAdminUser().then(() => loadCurrentUser());
+    loadCurrentUser();
   }, []);
 
   async function loadCurrentUser() {
